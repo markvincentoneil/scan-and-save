@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Scan and Save" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f1419" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="apple-itunes-app" content="app-id=558297215" />
+  <title>Scan and Save</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a2332;
+      --text: #e8eef4;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-pressed: #2563eb;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --border: #2d3a4f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+      line-height: 1.45;
+    }
+
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin: 0 0 6px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin: 0 0 20px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .scanner-wrap {
+      position: relative;
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #000;
+      min-height: 280px;
+    }
+
+    #reader {
+      width: 100%;
+      min-height: 280px;
+    }
+
+    #reader video {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      min-height: 240px !important;
+      object-fit: cover;
+    }
+
+    .scan-hint {
+      margin: 0 0 10px;
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .btn-capture {
+      background: linear-gradient(135deg, #ea580c, #f97316);
+      color: #fff;
+    }
+
+    .btn-torch {
+      background: #374151;
+      color: #fbbf24;
+    }
+
+    .btn-torch.torch-on {
+      background: linear-gradient(135deg, #ca8a04, #eab308);
+      color: #1c1917;
+    }
+
+    #liveProductLabel {
+      margin-bottom: 6px;
+    }
+
+    #liveProductName {
+      margin-bottom: 12px;
+      font-weight: 600;
+      background: var(--bg);
+      border-color: var(--border);
+    }
+
+    #liveProductName.looking {
+      border-color: #3b82f6;
+      color: #93c5fd;
+    }
+
+    #liveProductName.found {
+      border-color: #22c55e;
+      color: #bbf7d0;
+      background: #14532d33;
+    }
+
+    #liveProductName.warn {
+      border-color: #f59e0b;
+      color: #fde68a;
+      background: #42200633;
+    }
+
+    .capture-flash {
+      position: fixed;
+      inset: 0;
+      background: #fff;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 10000;
+    }
+
+    .capture-flash.run {
+      animation: captureFlash 0.4s ease-out forwards;
+    }
+
+    @keyframes captureFlash {
+      0% { opacity: 0; }
+      12% { opacity: 0.92; }
+      100% { opacity: 0; }
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px 16px;
+      margin-top: 10px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:active { background: var(--accent-pressed); }
+
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .btn-flipp {
+      background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+      color: #fff;
+    }
+
+    .btn-reebee {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: #fff;
+    }
+
+    .btn-google {
+      background: linear-gradient(135deg, #1a56db, #2563eb);
+      color: #fff;
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    input[type="text"],
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+      font-family: inherit;
+    }
+
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+
+    .meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .status {
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      margin-top: 10px;
+    }
+
+    .status.info { background: #1e3a5f; color: #bfdbfe; }
+    .status.ok { background: #14532d; color: #bbf7d0; }
+    .status.warn { background: #422006; color: #fde68a; }
+    .status.err { background: #450a0a; color: #fecaca; }
+
+    .hidden { display: none !important; }
+
+    .steps {
+      margin: 0;
+      padding-left: 1.2rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .steps li { margin-bottom: 6px; }
+
+    .install-help {
+      margin-top: 12px;
+      padding: 12px;
+      background: #0f1419;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .install-help strong { color: var(--text); }
+
+    .install-help ol {
+      margin: 8px 0 0;
+      padding-left: 1.2rem;
+    }
+
+    .install-help li { margin-bottom: 6px; }
+
+    .install-badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--ok);
+      font-size: 0.85rem;
+    }
+
+    footer {
+      margin-top: 20px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>Scan and Save</h1>
+  <p class="subtitle">Scan a barcode, get the product name, then search flyers and deals.</p>
+
+  <div class="card">
+    <p class="scan-hint hidden" id="scanHint">
+      Hold the phone <strong>10–14 inches (25–35 cm)</strong> from the barcode.
+      <strong>Auto-scan</strong> captures when sharp, or tap <strong>Scan now</strong> anytime.
+    </p>
+    <label class="scan-hint hidden" id="autoScanLabel" style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+      <input type="checkbox" id="autoScanEnabled" checked style="width: 1.1rem; height: 1.1rem;" />
+      Auto-scan when barcode is in focus
+    </label>
+    <label for="liveProductName" class="hidden" id="liveProductLabel">Captured product</label>
+    <input
+      type="text"
+      id="liveProductName"
+      class="hidden"
+      readonly
+      placeholder="Waiting for barcode…"
+      aria-live="polite"
+    />
+    <div id="captureFlash" class="capture-flash" aria-hidden="true"></div>
+    <div class="scanner-wrap hidden" id="scannerWrap">
+      <div id="reader"></div>
+    </div>
+    <button type="button" class="btn btn-primary" id="btnScan">Start camera</button>
+    <button type="button" class="btn btn-capture hidden" id="btnCapture">Scan now (when barcode is in focus)</button>
+    <button type="button" class="btn btn-torch hidden" id="btnTorch">Flashlight on</button>
+    <button type="button" class="btn btn-secondary hidden" id="btnStop">Stop camera</button>
+    <label for="manualBarcode" style="margin-top: 14px;">Or type barcode manually</label>
+    <input type="text" id="manualBarcode" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 0662900001234" />
+    <button type="button" class="btn btn-secondary" id="btnManual">Look up this barcode</button>
+    <div id="scanStatus" class="status info hidden"></div>
+    <p class="scan-hint" id="cameraHelp" style="margin-top: 12px;">
+      <strong>Camera blocked?</strong> iPhone: Settings → Safari → Camera → <strong>Allow</strong>,
+      then reload this page. Also check Settings → Privacy &amp; Security → Camera → Safari is on.
+    </p>
+  </div>
+
+  <div class="card hidden" id="resultCard">
+    <label for="searchText">Search text (edit if you like)</label>
+    <textarea id="searchText" rows="2"></textarea>
+    <p class="meta" id="productMeta"></p>
+
+    <button type="button" class="btn btn-secondary" id="btnCopy">Copy search text</button>
+    <button type="button" class="btn btn-reebee" id="btnReebee">Copy &amp; open Reebee app</button>
+    <button type="button" class="btn btn-flipp" id="btnFlipp">Search on Flipp.com</button>
+    <button type="button" class="btn btn-google" id="btnGoogleFlyer">Search on Google (flyers)</button>
+    <a class="btn btn-secondary" id="btnReebeeStore" href="https://apps.apple.com/app/id558297215" target="_blank" rel="noopener noreferrer" style="text-align: center; text-decoration: none; display: block;">Get Reebee on the App Store</a>
+    <button type="button" class="btn btn-secondary" id="btnScanAgain">Scan another item</button>
+    <div id="actionStatus" class="status hidden"></div>
+  </div>
+
+  <div class="card" id="installCard">
+    <strong style="font-size: 0.95rem;">Save on your iPhone</strong>
+    <p class="meta" style="margin: 8px 0 12px;">
+      The camera only works over <strong>HTTPS</strong>, not from a file saved in Files.
+      Add this page to your home screen from the <strong>current</strong> link you use (home computer or GitHub).
+    </p>
+    <p class="meta" style="margin: 0 0 12px; color: var(--warn);">
+      <strong>Old icon not working?</strong> Delete it (long-press → Remove App), open the app again in Safari
+      from a working address, then Add to Home Screen again. Renaming the app does not update an old icon’s link.
+    </p>
+    <div id="standaloneBadge" class="install-badge hidden">Opened from Home Screen</div>
+    <button type="button" class="btn btn-secondary" id="btnInstallHelp">Add to Home Screen — how to</button>
+    <button type="button" class="btn btn-secondary" id="btnDownloadHtml">Download HTML backup</button>
+    <div id="installHelp" class="install-help hidden">
+      <strong>iPhone (Safari)</strong>
+      <ol>
+        <li>Open this page using your computer’s <strong>HTTPS</strong> address (from <code>serve-https.py</code>).</li>
+        <li>Tap the <strong>Share</strong> button (square with arrow up).</li>
+        <li>Scroll and tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
+        <li>Launch <strong>Scan and Save</strong> from your home screen — no need to type the address again.</li>
+      </ol>
+      <p style="margin: 12px 0 0;">
+        If the icon was saved from your <strong>computer’s HTTPS address</strong>, that computer must be on and
+        running <code>serve-https.py</code> on the same Wi‑Fi — or use a <strong>GitHub Pages</strong> link instead
+        so the icon works without your PC.
+      </p>
+      <p style="margin: 8px 0 0; color: var(--warn);">
+        Safari does not allow websites to trigger “Add to Home Screen” automatically — you use Share manually.
+      </p>
+    </div>
+    <div id="downloadStatus" class="status hidden" style="margin-top: 10px;"></div>
+  </div>
+
+  <div class="card">
+    <strong style="font-size: 0.95rem;">Tips</strong>
+    <ol class="steps">
+      <li>Web and app searches <strong>copy</strong> the product name first — paste if the search box is empty (long-press → Paste).</li>
+      <li>Accept the certificate warning the first time you open your computer’s HTTPS link.</li>
+    </ol>
+  </div>
+
+  <footer>
+    Product names from <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+  <script>
+    const FLIPP_SEARCH_BASE = "https://flipp.com/search";
+    const REEBEE_APP_STORE_URL = "https://apps.apple.com/app/id558297215";
+    const REEBEE_APP_SCHEME = "com.reebee.reebee://";
+
+    function googleFlyerSearchUrl(searchText) {
+      const q = encodeURIComponent(searchText.trim());
+      return "https://www.google.com/search?q=" + q + "+grocery+flyer+canada";
+    }
+
+    function openReebeeApp() {
+      window.location.href = REEBEE_APP_SCHEME;
+    }
+
+    function reebeeWebSearchUrl(searchText) {
+      const q = encodeURIComponent(searchText.trim());
+      return q ? "https://www.reebee.com/search?q=" + q : "https://www.reebee.com";
+    }
+
+    const scannerWrap = document.getElementById("scannerWrap");
+    const scanHint = document.getElementById("scanHint");
+    const autoScanLabel = document.getElementById("autoScanLabel");
+    const autoScanEnabled = document.getElementById("autoScanEnabled");
+    const btnScan = document.getElementById("btnScan");
+    const btnStop = document.getElementById("btnStop");
+    const btnCapture = document.getElementById("btnCapture");
+    const btnTorch = document.getElementById("btnTorch");
+    const manualBarcode = document.getElementById("manualBarcode");
+    const btnManual = document.getElementById("btnManual");
+    const scanStatus = document.getElementById("scanStatus");
+    const resultCard = document.getElementById("resultCard");
+    const searchText = document.getElementById("searchText");
+    const productMeta = document.getElementById("productMeta");
+    const btnCopy = document.getElementById("btnCopy");
+    const btnFlipp = document.getElementById("btnFlipp");
+    const btnGoogleFlyer = document.getElementById("btnGoogleFlyer");
+    const btnReebee = document.getElementById("btnReebee");
+    const btnScanAgain = document.getElementById("btnScanAgain");
+    const actionStatus = document.getElementById("actionStatus");
+    const liveProductLabel = document.getElementById("liveProductLabel");
+    const liveProductName = document.getElementById("liveProductName");
+    const captureFlash = document.getElementById("captureFlash");
+
+    let scanner = null;
+    let isScanning = false;
+    let lastBarcode = null;
+    let lastScanAt = 0;
+    let lookupInFlight = false;
+    let torchOn = false;
+    let torchSupported = false;
+    let autoScanTimer = null;
+    let autoScanBusy = false;
+    let autoScanStreak = { code: null, count: 0 };
+    const SCAN_COOLDOWN_MS = 2500;
+    const AUTO_SCAN_INTERVAL_MS = 250;
+    const AUTO_SCAN_MATCHES = 2;
+    const AUTO_SCAN_SHARPNESS_MIN = 35;
+
+    function resetScanSession() {
+      lastBarcode = null;
+      lastScanAt = 0;
+      lookupInFlight = false;
+      autoScanStreak = { code: null, count: 0 };
+    }
+
+    function showLiveProductUI() {
+      liveProductLabel.classList.remove("hidden");
+      liveProductName.classList.remove("hidden");
+    }
+
+    function hideLiveProductUI() {
+      liveProductLabel.classList.add("hidden");
+      liveProductName.classList.add("hidden");
+    }
+
+    function setLiveProduct(text, state) {
+      liveProductName.value = text || "";
+      liveProductName.classList.remove("looking", "found", "warn");
+      if (state) liveProductName.classList.add(state);
+    }
+
+    function clearLiveProduct() {
+      setLiveProduct("", "");
+      liveProductName.placeholder = "Waiting for barcode…";
+    }
+
+    function triggerCaptureFlash() {
+      captureFlash.classList.remove("run");
+      void captureFlash.offsetWidth;
+      captureFlash.classList.add("run");
+      setTimeout(function () {
+        captureFlash.classList.remove("run");
+      }, 450);
+    }
+
+    function resetAutoScanStreak() {
+      autoScanStreak = { code: null, count: 0 };
+    }
+
+    function stopAutoScan() {
+      if (autoScanTimer) {
+        clearInterval(autoScanTimer);
+        autoScanTimer = null;
+      }
+      autoScanBusy = false;
+      resetAutoScanStreak();
+    }
+
+    function startAutoScan() {
+      stopAutoScan();
+      if (!autoScanEnabled || !autoScanEnabled.checked) return;
+
+      autoScanTimer = setInterval(function () {
+        tryAutoScanTick();
+      }, AUTO_SCAN_INTERVAL_MS);
+    }
+
+    function measureSharpness(canvas) {
+      const sw = 120;
+      const sh = 80;
+      const small = document.createElement("canvas");
+      small.width = sw;
+      small.height = sh;
+      const ctx = small.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(canvas, 0, 0, sw, sh);
+      const data = ctx.getImageData(0, 0, sw, sh).data;
+      let sum = 0;
+      let sumSq = 0;
+      let n = 0;
+
+      for (let y = 1; y < sh - 1; y++) {
+        for (let x = 1; x < sw - 1; x++) {
+          const i = (y * sw + x) * 4;
+          const c = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          const iu = ((y - 1) * sw + x) * 4;
+          const id = ((y + 1) * sw + x) * 4;
+          const il = (y * sw + (x - 1)) * 4;
+          const ir = (y * sw + (x + 1)) * 4;
+          const up = 0.299 * data[iu] + 0.587 * data[iu + 1] + 0.114 * data[iu + 2];
+          const dn = 0.299 * data[id] + 0.587 * data[id + 1] + 0.114 * data[id + 2];
+          const lf = 0.299 * data[il] + 0.587 * data[il + 1] + 0.114 * data[il + 2];
+          const rt = 0.299 * data[ir] + 0.587 * data[ir + 1] + 0.114 * data[ir + 2];
+          const lap = Math.abs(4 * c - up - dn - lf - rt);
+          sum += lap;
+          sumSq += lap * lap;
+          n++;
+        }
+      }
+
+      if (n === 0) return 0;
+      const mean = sum / n;
+      return sumSq / n - mean * mean;
+    }
+
+    async function tryAutoScanTick() {
+      if (
+        !isScanning ||
+        !scanner ||
+        autoScanBusy ||
+        lookupInFlight ||
+        btnCapture.disabled ||
+        !autoScanEnabled.checked ||
+        !resultCard.classList.contains("hidden")
+      ) {
+        return;
+      }
+
+      const video = getScannerVideo();
+      if (!video || !video.videoWidth) return;
+
+      autoScanBusy = true;
+      try {
+        const canvas = frameToCanvas(video, true);
+        const sharpness = measureSharpness(canvas);
+        if (sharpness < AUTO_SCAN_SHARPNESS_MIN) {
+          resetAutoScanStreak();
+          return;
+        }
+
+        const decoded = await decodeCanvasWithZxing(canvas);
+        const code = normalizeBarcode(decoded);
+        if (!code) {
+          resetAutoScanStreak();
+          return;
+        }
+
+        if (autoScanStreak.code === code) {
+          autoScanStreak.count += 1;
+        } else {
+          autoScanStreak = { code: code, count: 1 };
+        }
+
+        if (autoScanStreak.count >= AUTO_SCAN_MATCHES) {
+          resetAutoScanStreak();
+          showStatus(scanStatus, "Auto-scan got barcode " + code + "…", "info");
+          await processBarcode(code, { auto: true });
+        }
+      } catch (e) {
+        console.debug("auto-scan", e);
+      } finally {
+        autoScanBusy = false;
+      }
+    }
+
+    function clearReaderElement() {
+      const reader = document.getElementById("reader");
+      if (reader) reader.innerHTML = "";
+    }
+
+    function getScannerVideo() {
+      return document.querySelector("#reader video");
+    }
+
+    function describeCameraError(err) {
+      const name = err && err.name ? err.name : "";
+      const msg = err && err.message ? err.message : String(err);
+
+      if (name === "NotAllowedError" || /permission|denied|not allowed/i.test(msg)) {
+        return (
+          "Camera access is blocked. On iPhone: Settings → Safari → Camera → Allow, " +
+          "then reload this page and tap Start camera. You should see an Allow prompt."
+        );
+      }
+      if (name === "NotFoundError") {
+        return "No camera was found on this device.";
+      }
+      if (name === "NotReadableError" || name === "TrackStartError") {
+        return "Camera is busy (another app may be using it). Close other camera apps and try again.";
+      }
+      if (name === "OverconstrainedError") {
+        return "Camera settings are not supported on this phone. Tap Start camera to try again.";
+      }
+      if (name === "SecurityError" || /secure/i.test(msg)) {
+        return "Camera needs HTTPS. Open https://YOUR-PC-IP:8443 (not http).";
+      }
+      return msg || "Could not start the camera.";
+    }
+
+    async function requestCameraPermission() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera is not supported in this browser.");
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+
+      stream.getTracks().forEach(function (track) {
+        track.stop();
+      });
+    }
+
+    async function applyFocusHelper() {
+      if (!scanner) return;
+      try {
+        await scanner.applyVideoConstraints({
+          advanced: [{ focusMode: "continuous" }, { focusMode: "auto" }],
+        });
+      } catch (e) {
+        console.debug("focus constraints not supported", e);
+      }
+    }
+
+    function updateTorchButton() {
+      if (torchSupported) {
+        btnTorch.classList.remove("hidden");
+        btnTorch.textContent = torchOn ? "Flashlight off" : "Flashlight on";
+        btnTorch.classList.toggle("torch-on", torchOn);
+      } else {
+        btnTorch.classList.add("hidden");
+      }
+    }
+
+    async function detectTorchSupport() {
+      torchSupported = false;
+      if (!scanner) {
+        updateTorchButton();
+        return;
+      }
+
+      try {
+        const caps = scanner.getRunningTrackCameraCapabilities();
+        if (caps && caps.torch) {
+          torchSupported = true;
+        }
+      } catch (e) {
+        console.debug("html5-qrcode torch caps", e);
+      }
+
+      if (!torchSupported) {
+        const video = getScannerVideo();
+        const track = video && video.srcObject && video.srcObject.getVideoTracks()[0];
+        if (track && typeof track.getCapabilities === "function") {
+          const caps = track.getCapabilities();
+          if (caps.torch) {
+            torchSupported = true;
+          }
+        }
+      }
+
+      updateTorchButton();
+    }
+
+    async function setTorch(on) {
+      if (!scanner || !isScanning || !torchSupported) return;
+
+      const attempts = [
+        { advanced: [{ torch: on }] },
+        { torch: on },
+      ];
+
+      for (let i = 0; i < attempts.length; i++) {
+        try {
+          await scanner.applyVideoConstraints(attempts[i]);
+          torchOn = on;
+          updateTorchButton();
+          return;
+        } catch (e) {
+          console.debug("torch attempt", i, e);
+        }
+      }
+
+      const video = getScannerVideo();
+      const track = video && video.srcObject && video.srcObject.getVideoTracks()[0];
+      if (track) {
+        for (let i = 0; i < attempts.length; i++) {
+          try {
+            await track.applyConstraints(attempts[i]);
+            torchOn = on;
+            updateTorchButton();
+            return;
+          } catch (e) {
+            console.debug("track torch attempt", i, e);
+          }
+        }
+      }
+
+      showStatus(scanStatus, "Could not toggle flashlight on this device.", "warn");
+    }
+
+    async function toggleTorch() {
+      await setTorch(!torchOn);
+    }
+
+    function extractDecodedText(result) {
+      if (!result) return null;
+      if (typeof result === "string") return result;
+      if (typeof result.decodedText === "string") return result.decodedText;
+      return null;
+    }
+
+    function frameToCanvas(video, cropCenter) {
+      const canvas = document.createElement("canvas");
+      if (!cropCenter) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        return canvas;
+      }
+
+      const cropW = Math.floor(video.videoWidth * 0.92);
+      const cropH = Math.floor(video.videoHeight * 0.45);
+      const sx = Math.floor((video.videoWidth - cropW) / 2);
+      const sy = Math.floor((video.videoHeight - cropH) / 2);
+      canvas.width = cropW;
+      canvas.height = cropH;
+      canvas.getContext("2d").drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+      return canvas;
+    }
+
+    async function decodeCanvasWithZxing(canvas) {
+      if (typeof ZXing === "undefined") return null;
+
+      const formats = [
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+      ];
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+      const img = new Image();
+      img.src = canvas.toDataURL("image/png");
+      await new Promise(function (resolve, reject) {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const reader = new ZXing.BrowserMultiFormatReader(hints);
+      try {
+        const result = await reader.decodeFromImageElement(img);
+        return result ? result.getText() : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function decodeSnapshotFromCanvas(canvas) {
+      const blob = await new Promise(function (resolve) {
+        canvas.toBlob(resolve, "image/jpeg", 0.95);
+      });
+      if (!blob) return null;
+
+      const file = new File([blob], "barcode-snapshot.jpg", { type: "image/jpeg" });
+
+      if (scanner && typeof scanner.pause === "function") {
+        try {
+          await scanner.pause(true);
+        } catch (e) {
+          console.debug("pause", e);
+        }
+      }
+
+      try {
+        if (scanner && typeof scanner.scanFileV2 === "function") {
+          const r = await scanner.scanFileV2(file, false);
+          const text = extractDecodedText(r);
+          if (text) return text;
+        }
+        if (scanner && typeof scanner.scanFile === "function") {
+          const r = await scanner.scanFile(file, false);
+          const text = extractDecodedText(r);
+          if (text) return text;
+        }
+      } catch (e) {
+        console.debug("html5-qrcode file scan", e);
+      }
+
+      return decodeCanvasWithZxing(canvas);
+    }
+
+    async function captureAndScan() {
+      if (!scanner || !isScanning) {
+        showStatus(scanStatus, "Start the camera first.", "warn");
+        return;
+      }
+
+      const video = getScannerVideo();
+      if (!video || !video.videoWidth) {
+        showStatus(scanStatus, "Camera still loading — wait a second and try again.", "warn");
+        return;
+      }
+
+      showStatus(scanStatus, "Capturing photo…", "info");
+      btnCapture.disabled = true;
+
+      try {
+        let decoded = await decodeSnapshotFromCanvas(frameToCanvas(video, false));
+        if (!decoded) {
+          decoded = await decodeSnapshotFromCanvas(frameToCanvas(video, true));
+        }
+
+        if (!decoded) {
+          throw new Error("No barcode found in photo");
+        }
+
+        await processBarcode(decoded);
+      } catch (err) {
+        console.warn(err);
+        showStatus(
+          scanStatus,
+          "Could not read the barcode. Center it in the picture, use the flashlight, wait until sharp, then tap Scan now again.",
+          "warn"
+        );
+      } finally {
+        btnCapture.disabled = false;
+        if (scanner && typeof scanner.resume === "function") {
+          try {
+            await scanner.resume();
+          } catch (e) {
+            console.debug("resume", e);
+          }
+        }
+      }
+    }
+
+
+    function showStatus(el, message, type) {
+      el.textContent = message;
+      el.className = "status " + type;
+      el.classList.remove("hidden");
+    }
+
+    function hideStatus(el) {
+      el.classList.add("hidden");
+    }
+
+    function buildSearchName(product) {
+      const name = (product.product_name || product.product_name_en || "").trim();
+      const generic = (product.generic_name || "").trim();
+      const brand = (product.brands || "").split(",")[0].trim();
+      if (name && brand && !name.toLowerCase().includes(brand.toLowerCase())) {
+        return brand + " " + name;
+      }
+      return name || generic || brand || "";
+    }
+
+    async function lookupBarcode(code) {
+      const url =
+        "https://world.openfoodfacts.org/api/v2/product/" +
+        encodeURIComponent(code) +
+        "?fields=product_name,product_name_en,generic_name,brands,quantity";
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Lookup failed (" + res.status + ")");
+      const data = await res.json();
+      if (data.status !== 1 || !data.product) {
+        return { found: false, searchName: "", display: "Product not in Open Food Facts." };
+      }
+
+      const searchName = buildSearchName(data.product);
+      const qty = data.product.quantity ? " · " + data.product.quantity : "";
+      const display = searchName || "Unknown product name";
+      return {
+        found: Boolean(searchName),
+        searchName: searchName || code,
+        display,
+        meta: "UPC " + code + qty,
+      };
+    }
+
+    function normalizeBarcode(raw) {
+      const digits = String(raw).replace(/\D/g, "");
+      if (digits.length >= 8 && digits.length <= 14) return digits;
+      return null;
+    }
+
+    async function processBarcode(raw, options) {
+      const opts = options || {};
+      const code = normalizeBarcode(raw);
+      if (!code) {
+        showStatus(scanStatus, "Could not read a valid barcode number from that scan.", "warn");
+        setLiveProduct("Could not read barcode", "warn");
+        return;
+      }
+      if (lookupInFlight) return;
+
+      const now = Date.now();
+      if (code === lastBarcode && now - lastScanAt < SCAN_COOLDOWN_MS) return;
+
+      lastBarcode = code;
+      lastScanAt = now;
+      lookupInFlight = true;
+
+      if (opts.auto) {
+        triggerCaptureFlash();
+      }
+      if (navigator.vibrate) navigator.vibrate(80);
+
+      setLiveProduct("Looking up UPC " + code + "…", "looking");
+      showStatus(scanStatus, "Barcode " + code + " — looking up name…", "info");
+      resultCard.classList.remove("hidden");
+
+      try {
+        const result = await lookupBarcode(code);
+        searchText.value = result.searchName || code;
+        productMeta.textContent = result.meta || "UPC " + code;
+        manualBarcode.value = code;
+
+        if (result.found) {
+          setLiveProduct(result.display, "found");
+          showStatus(scanStatus, "Found: " + result.display, "ok");
+        } else {
+          setLiveProduct("No name found — UPC " + code, "warn");
+          showStatus(
+            scanStatus,
+            "No name in database — edit the text below, then search Flipp.",
+            "warn"
+          );
+        }
+      } catch (err) {
+        searchText.value = code;
+        productMeta.textContent = "UPC " + code;
+        setLiveProduct("Lookup failed — UPC " + code, "warn");
+        showStatus(
+          scanStatus,
+          "Lookup error. You can still search with the barcode number.",
+          "warn"
+        );
+        console.error(err);
+      } finally {
+        lookupInFlight = false;
+        showStatus(
+          scanStatus,
+          "Done — scan another item or tap Stop camera.",
+          "info"
+        );
+      }
+    }
+
+    function onScanSuccess(decodedText) {
+      const code = normalizeBarcode(decodedText);
+      if (!code || lookupInFlight) return;
+      if (autoScanStreak.code === code) {
+        autoScanStreak.count += 1;
+      } else {
+        autoScanStreak = { code: code, count: 1 };
+      }
+      if (autoScanStreak.count >= AUTO_SCAN_MATCHES) {
+        resetAutoScanStreak();
+        processBarcode(code, { auto: true });
+      }
+    }
+
+    async function startCamera() {
+      if (isScanning) return;
+      if (typeof Html5Qrcode === "undefined") {
+        showStatus(scanStatus, "Scanner library not loaded. Refresh the page.", "err");
+        return;
+      }
+
+      hideStatus(scanStatus);
+      resultCard.classList.add("hidden");
+      resetScanSession();
+
+      if (!window.isSecureContext) {
+        showStatus(
+          scanStatus,
+          "Camera requires HTTPS. Use https://YOUR-PC-IP:8443 on your phone.",
+          "err"
+        );
+        return;
+      }
+
+      btnScan.disabled = true;
+
+      if (scanner) {
+        try {
+          if (isScanning) await scanner.stop();
+          await scanner.clear();
+        } catch (e) {
+          console.warn(e);
+        }
+        scanner = null;
+        isScanning = false;
+      }
+      clearReaderElement();
+
+      scannerWrap.classList.remove("hidden");
+      scanHint.classList.remove("hidden");
+      showLiveProductUI();
+      clearLiveProduct();
+      showStatus(scanStatus, "Requesting camera access…", "info");
+
+      try {
+        await requestCameraPermission();
+      } catch (permErr) {
+        await stopCamera();
+        showStatus(scanStatus, describeCameraError(permErr), "err");
+        console.error(permErr);
+        return;
+      }
+
+      try {
+        scanner = new Html5Qrcode("reader", { verbose: false });
+        const formatsToSupport = [
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_E,
+        ];
+
+        const config = {
+          fps: 10,
+          formatsToSupport,
+          disableFlip: false,
+        };
+
+        const cameraAttempts = [
+          { facingMode: "environment" },
+          { facingMode: "user" },
+        ];
+
+        let startError = null;
+        for (let i = 0; i < cameraAttempts.length; i++) {
+          try {
+            await scanner.start(
+              cameraAttempts[i],
+              config,
+              onScanSuccess,
+              function () {}
+            );
+            startError = null;
+            break;
+          } catch (camErr) {
+            startError = camErr;
+            console.warn("camera attempt", i, camErr);
+            try {
+              await scanner.stop();
+              await scanner.clear();
+            } catch (e) {
+              /* ignore */
+            }
+            clearReaderElement();
+            if (i < cameraAttempts.length - 1) {
+              scanner = new Html5Qrcode("reader", { verbose: false });
+            }
+          }
+        }
+
+        if (startError) {
+          throw startError;
+        }
+
+        isScanning = true;
+
+        await applyFocusHelper();
+        torchOn = false;
+        await detectTorchSupport();
+        updateTorchButton();
+
+        showStatus(
+          scanStatus,
+          autoScanEnabled.checked
+            ? "Auto-scan on — hold steady when sharp. Or tap Scan now."
+            : "Camera on — tap Scan now when the barcode looks sharp.",
+          "info"
+        );
+
+        startAutoScan();
+
+        btnScan.classList.add("hidden");
+        btnCapture.classList.remove("hidden");
+        autoScanLabel.classList.remove("hidden");
+        autoScanLabel.style.display = "flex";
+        btnStop.classList.remove("hidden");
+      } catch (err) {
+        await stopCamera();
+        showStatus(scanStatus, describeCameraError(err), "err");
+        console.error(err);
+      }
+    }
+
+    async function stopCamera() {
+      stopAutoScan();
+
+      if (torchOn && torchSupported) {
+        try {
+          await setTorch(false);
+        } catch (e) {
+          console.debug("torch off", e);
+        }
+      }
+
+      if (scanner) {
+        try {
+          if (isScanning) {
+            await scanner.stop();
+          }
+          await scanner.clear();
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+
+      scanner = null;
+      isScanning = false;
+      clearReaderElement();
+      scannerWrap.classList.add("hidden");
+      scanHint.classList.add("hidden");
+      autoScanLabel.classList.add("hidden");
+      hideLiveProductUI();
+      btnCapture.classList.add("hidden");
+      btnTorch.classList.add("hidden");
+      torchOn = false;
+      torchSupported = false;
+      btnScan.disabled = false;
+      btnScan.classList.remove("hidden");
+      btnStop.classList.add("hidden");
+    }
+
+    async function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+
+    function flippSearchUrl(query) {
+      const q = encodeURIComponent(query.trim());
+      return FLIPP_SEARCH_BASE + (q ? "?q=" + q : "");
+    }
+
+    async function openWebFlyerSearch(buildUrl, siteName) {
+      const text = searchText.value.trim();
+      if (!text) {
+        showStatus(actionStatus, "Enter or scan something first.", "warn");
+        return;
+      }
+
+      try {
+        await copyText(text);
+      } catch (e) {
+        showStatus(actionStatus, "Could not copy — paste manually on " + siteName + ".", "warn");
+      }
+
+      window.open(buildUrl(text), "_blank", "noopener,noreferrer");
+      showStatus(
+        actionStatus,
+        "Opened " + siteName + " search. Paste if the search box is empty (already copied).",
+        "ok"
+      );
+    }
+
+    async function handleCopy() {
+      const text = searchText.value.trim();
+      if (!text) {
+        showStatus(actionStatus, "Nothing to copy.", "warn");
+        return;
+      }
+      try {
+        await copyText(text);
+        showStatus(actionStatus, "Copied to clipboard.", "ok");
+      } catch (e) {
+        showStatus(actionStatus, "Copy failed. Select the text and copy manually.", "err");
+      }
+    }
+
+    async function handleFlipp() {
+      await openWebFlyerSearch(flippSearchUrl, "Flipp.com");
+    }
+
+    async function handleGoogleFlyer() {
+      await openWebFlyerSearch(googleFlyerSearchUrl, "Google");
+    }
+
+    async function handleReebee() {
+      const text = searchText.value.trim();
+      if (!text) {
+        showStatus(actionStatus, "Enter or scan something first.", "warn");
+        return;
+      }
+
+      try {
+        await copyText(text);
+      } catch (e) {
+        showStatus(actionStatus, "Could not copy — paste manually in Reebee.", "warn");
+      }
+
+      openReebeeApp();
+
+      setTimeout(function () {
+        if (document.hidden) {
+          showStatus(
+            actionStatus,
+            "Opened Reebee — long-press search and Paste (already copied).",
+            "ok"
+          );
+          return;
+        }
+
+        window.location.href = reebeeWebSearchUrl(text);
+        showStatus(
+          actionStatus,
+          "Reebee app did not open — opened reebee.com instead. Install from App Store if needed.",
+          "warn"
+        );
+      }, 900);
+    }
+
+    btnScan.addEventListener("click", startCamera);
+    btnCapture.addEventListener("click", captureAndScan);
+    btnTorch.addEventListener("click", toggleTorch);
+    btnStop.addEventListener("click", stopCamera);
+    autoScanEnabled.addEventListener("change", function () {
+      if (isScanning) {
+        if (autoScanEnabled.checked) {
+          startAutoScan();
+          showStatus(scanStatus, "Auto-scan enabled.", "info");
+        } else {
+          stopAutoScan();
+          showStatus(scanStatus, "Auto-scan off — use Scan now.", "info");
+        }
+      }
+    });
+    btnManual.addEventListener("click", () => {
+      const code = normalizeBarcode(manualBarcode.value);
+      if (!code) {
+        showStatus(scanStatus, "Enter 8–14 digits from the barcode.", "warn");
+        return;
+      }
+      resetScanSession();
+      processBarcode(code);
+    });
+    btnCopy.addEventListener("click", handleCopy);
+    btnReebee.addEventListener("click", handleReebee);
+    btnFlipp.addEventListener("click", handleFlipp);
+    btnGoogleFlyer.addEventListener("click", handleGoogleFlyer);
+    btnScanAgain.addEventListener("click", () => {
+      hideStatus(actionStatus);
+      resultCard.classList.add("hidden");
+      resetScanSession();
+      clearLiveProduct();
+      if (isScanning) {
+        startAutoScan();
+        showStatus(scanStatus, "Ready — point at the next barcode.", "info");
+      } else {
+        startCamera();
+      }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && isScanning) stopCamera();
+    });
+
+    const btnInstallHelp = document.getElementById("btnInstallHelp");
+    const btnDownloadHtml = document.getElementById("btnDownloadHtml");
+    const installHelp = document.getElementById("installHelp");
+    const downloadStatus = document.getElementById("downloadStatus");
+    const standaloneBadge = document.getElementById("standaloneBadge");
+
+    function isStandaloneApp() {
+      return (
+        window.matchMedia("(display-mode: standalone)").matches ||
+        window.navigator.standalone === true
+      );
+    }
+
+    if (isStandaloneApp() && standaloneBadge) {
+      standaloneBadge.classList.remove("hidden");
+    }
+
+    btnInstallHelp.addEventListener("click", () => {
+      installHelp.classList.toggle("hidden");
+      btnInstallHelp.textContent = installHelp.classList.contains("hidden")
+        ? "Add to Home Screen — how to"
+        : "Hide instructions";
+    });
+
+    async function handleDownloadHtml() {
+      showStatus(
+        downloadStatus,
+        "Downloading… Open the file in Safari only for backup — camera will not work from Files.",
+        "info"
+      );
+      downloadStatus.classList.remove("hidden");
+
+      try {
+        const pageUrl = new URL("index.html", window.location.href).href;
+        const res = await fetch(pageUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const html = await res.text();
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = "scan-and-save.html";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(blobUrl);
+        showStatus(
+          downloadStatus,
+          "Saved. For daily use, prefer Add to Home Screen from HTTPS — the backup file cannot use the camera on iPhone.",
+          "ok"
+        );
+      } catch (e) {
+        showStatus(
+          downloadStatus,
+          "Could not download. Open index.html from your HTTPS server and try again.",
+          "warn"
+        );
+      }
+    }
+
+    btnDownloadHtml.addEventListener("click", handleDownloadHtml);
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

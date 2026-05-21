@@ -1,0 +1,11 @@
+{
+  "name": "Scan and Save",
+  "short_name": "Scan and Save",
+  "description": "Scan grocery barcodes and search flyer prices",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "orientation": "portrait"
+}
