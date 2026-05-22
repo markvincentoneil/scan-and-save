@@ -193,11 +193,6 @@
       color: #fff;
     }
 
-    .btn-goupc {
-      background: linear-gradient(135deg, #0d9488, #14b8a6);
-      color: #fff;
-    }
-
     .btn:disabled {
       opacity: 0.45;
       cursor: not-allowed;
@@ -430,7 +425,6 @@
     <button type="button" class="btn btn-flipp" id="btnFlipp">Search on Flipp.com</button>
     <button type="button" class="btn btn-google" id="btnGoogleFlyer">Search on Google (flyers)</button>
     <button type="button" class="btn btn-raddar" id="btnRaddar">Search on Raddar.ca</button>
-    <button type="button" class="btn btn-goupc" id="btnGoUpc">Search on Go-UPC</button>
     <button type="button" class="btn btn-secondary" id="btnCopy">Copy search text</button>
     <a class="btn btn-secondary" id="btnReebeeStore" href="https://apps.apple.com/app/id558297215" target="_blank" rel="noopener noreferrer" style="text-align: center; text-decoration: none; display: block;">Get Reebee on the App Store</a>
     <button type="button" class="btn btn-secondary" id="btnScanAgain">Scan another item</button>
@@ -453,13 +447,13 @@
       <label class="row"><input type="checkbox" id="setAutoScan" checked /> Auto-scan when barcode is in focus</label>
       <label class="row"><input type="checkbox" id="setSourceOpenFacts" checked /> Lookup: Open Facts (all types)</label>
       <label class="row"><input type="checkbox" id="setSourceOpenProducts" checked /> Lookup: Open Products Facts</label>
-      <label class="row"><input type="checkbox" id="setGoUpc" checked /> Lookup: Go-UPC (search page URL)</label>
+      <label class="row"><input type="checkbox" id="setGoUpc" checked /> Lookup: Go-UPC (product name from search page)</label>
       <label for="setGoUpcApiKey">Go-UPC API key (optional)</label>
-      <input type="password" id="setGoUpcApiKey" autocomplete="off" placeholder="Optional — faster JSON lookup" />
+      <input type="password" id="setGoUpcApiKey" autocomplete="off" placeholder="Optional — JSON API instead of web page" />
       <p class="settings-hint">
-        Uses <code>go-upc.com/search?q=</code> + barcode (no key required for the website button).
-        Auto-lookup from that page may be blocked on iPhone; API key helps if you have one.
-        <a href="https://go-upc.com/search?q=060410017227" target="_blank" rel="noopener">Example search</a>
+        After a scan, the app loads <code>go-upc.com/search?q=</code> + your barcode and reads the product name from the page (usually the <strong>h1</strong> heading).
+        No button — it runs automatically. An API key is optional if you have one.
+        <a href="https://go-upc.com/search?q=060410017227" target="_blank" rel="noopener">Example page</a>
         · <a href="https://go-upc.com/docs" target="_blank" rel="noopener">API docs</a>
       </p>
       <label class="row"><input type="checkbox" id="setSourceUpcDev" /> Lookup: upc.dev (often slow)</label>
@@ -578,7 +572,6 @@
     const btnFlipp = document.getElementById("btnFlipp");
     const btnGoogleFlyer = document.getElementById("btnGoogleFlyer");
     const btnRaddar = document.getElementById("btnRaddar");
-    const btnGoUpc = document.getElementById("btnGoUpc");
     const btnScanAgain = document.getElementById("btnScanAgain");
     const actionStatus = document.getElementById("actionStatus");
     const liveProductLabel = document.getElementById("liveProductLabel");
@@ -716,9 +709,15 @@
       return appSettings[def.settingKey] !== false;
     }
 
-    function goUpcSearchUrl(query) {
+    function goUpcPublicSearchUrl(query) {
       const q = encodeURIComponent(String(query).trim());
       return "https://go-upc.com/search?q=" + q;
+    }
+
+    /** Same-origin URL handled by sw.js — fetches go-upc HTML so iPhone can read the h1 name. */
+    function goUpcHtmlLookupUrl(code) {
+      const q = encodeURIComponent(String(code).trim());
+      return "./goupc-proxy?q=" + q;
     }
 
     function getLookupDefById(id) {
@@ -1425,11 +1424,7 @@
       try {
         const res = await fetch(url, { signal: ctrl.signal });
         if (!res.ok) return null;
-        const text = await res.text();
-        if (res.url && res.url.indexOf("go-upc.com") < 0 && url.indexOf("go-upc.com") >= 0) {
-          return null;
-        }
-        return text;
+        return await res.text();
       } catch (err) {
         console.debug("fetchTextWithTimeout", url, err);
         return null;
@@ -1528,9 +1523,12 @@
 
     function parseGoUpcSearchHtml(html, code, sourceLabel) {
       if (!html || !isGoUpcProductHtml(html)) return null;
-      const h1 = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+      const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
       if (h1 && h1[1]) {
-        const name = h1[1].trim().replace(/\s+/g, " ");
+        const name = h1[1]
+          .replace(/<[^>]+>/g, " ")
+          .trim()
+          .replace(/\s+/g, " ");
         if (name.length > 2 && !/scan and save/i.test(name)) {
           return {
             found: true,
@@ -1573,7 +1571,7 @@
         if (apiResult && apiResult.found) return apiResult;
       }
 
-      const html = await fetchTextWithTimeout(goUpcSearchUrl(code));
+      const html = await fetchTextWithTimeout(goUpcHtmlLookupUrl(code));
       if (html) {
         const webResult = parseGoUpcSearchHtml(html, code, "Go-UPC");
         if (webResult && webResult.found) return webResult;
@@ -2040,15 +2038,6 @@
       await openWebFlyerSearch(raddarSearchUrl, "Raddar.ca");
     }
 
-    async function handleGoUpc() {
-      const text = searchText.value.trim() || lastBarcode || "";
-      if (!text) {
-        showStatus(actionStatus, "Enter or scan something first.", "warn");
-        return;
-      }
-      await openWebFlyerSearch(goUpcSearchUrl, "Go-UPC");
-    }
-
     async function readLabelFromCamera() {
       const video = getScannerVideo();
       if (!video || video.readyState < 2) {
@@ -2192,7 +2181,6 @@
     btnFlipp.addEventListener("click", handleFlipp);
     btnGoogleFlyer.addEventListener("click", handleGoogleFlyer);
     btnRaddar.addEventListener("click", handleRaddar);
-    btnGoUpc.addEventListener("click", handleGoUpc);
     btnScanAgain.addEventListener("click", () => {
       hideStatus(actionStatus);
       resultCard.classList.add("hidden");
