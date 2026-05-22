@@ -602,7 +602,7 @@
     const btnReloadApp = document.getElementById("btnReloadApp");
     const appVersionEl = document.getElementById("appVersion");
 
-    let appSettings = loadSettings();
+    let appSettings;
     let lastLookupResult = null;
     let resumeCameraOnShow = false;
     let autoStartAttempted = false;
@@ -695,6 +695,8 @@
         preferredFlyer: "flipp",
       };
     }
+
+    appSettings = loadSettings();
 
     function normalizeSourceOrder(order) {
       const ids = LOOKUP_SOURCE_DEFS.map(function (d) {
