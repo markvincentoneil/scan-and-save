@@ -816,8 +816,23 @@
       return entry;
     }
 
+    function scrubBadProductCache() {
+      const cache = loadJsonStorage(STORAGE_KEYS.cache, {});
+      let dirty = false;
+      Object.keys(cache).forEach(function (code) {
+        const entry = cache[code];
+        const label = ((entry && (entry.searchName || entry.display)) || "").toLowerCase();
+        if (label.indexOf("scan and save") >= 0) {
+          delete cache[code];
+          dirty = true;
+        }
+      });
+      if (dirty) saveJsonStorage(STORAGE_KEYS.cache, cache);
+    }
+
     function saveProductCache(code, result) {
       if (!code || !result || !result.searchName) return;
+      if (/scan and save/i.test(result.searchName || result.display || "")) return;
       const cache = loadJsonStorage(STORAGE_KEYS.cache, {});
       cache[code] = {
         found: true,
@@ -1393,6 +1408,16 @@
       }
     }
 
+    function isOurAppHtml(text) {
+      if (!text) return false;
+      return /id="reader"/.test(text) || /Scan and Save/i.test(text);
+    }
+
+    function isGoUpcProductHtml(text) {
+      if (!text || isOurAppHtml(text)) return false;
+      return /go-upc\.com/i.test(text);
+    }
+
     async function fetchTextWithTimeout(url, timeoutMs) {
       const ms = timeoutMs || LOOKUP_FETCH_MS;
       const ctrl = new AbortController();
@@ -1400,7 +1425,11 @@
       try {
         const res = await fetch(url, { signal: ctrl.signal });
         if (!res.ok) return null;
-        return await res.text();
+        const text = await res.text();
+        if (res.url && res.url.indexOf("go-upc.com") < 0 && url.indexOf("go-upc.com") >= 0) {
+          return null;
+        }
+        return text;
       } catch (err) {
         console.debug("fetchTextWithTimeout", url, err);
         return null;
@@ -1498,11 +1527,11 @@
     }
 
     function parseGoUpcSearchHtml(html, code, sourceLabel) {
-      if (!html) return null;
+      if (!html || !isGoUpcProductHtml(html)) return null;
       const h1 = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
       if (h1 && h1[1]) {
         const name = h1[1].trim().replace(/\s+/g, " ");
-        if (name.length > 2) {
+        if (name.length > 2 && !/scan and save/i.test(name)) {
           return {
             found: true,
             searchName: name,
@@ -1518,7 +1547,7 @@
           .split(" - UPC")[0]
           .split(" — UPC")[0]
           .trim();
-        if (name.length > 2 && !/go-upc/i.test(name)) {
+        if (name.length > 2 && !/go-upc/i.test(name) && !/scan and save/i.test(name)) {
           return {
             found: true,
             searchName: name,
@@ -2200,6 +2229,7 @@
 
     if (appVersionEl) appVersionEl.textContent = "v" + APP_VERSION;
     applySettingsToUI();
+    scrubBadProductCache();
     window.addEventListener("load", function () {
       setTimeout(maybeAutoStartCamera, 400);
     });

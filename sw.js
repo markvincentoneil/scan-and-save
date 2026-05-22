@@ -1,4 +1,4 @@
-const CACHE = "scan-and-save-v2-app-15";
+const CACHE = "scan-and-save-v2-app-16";
 
 const PRECACHE = [
   "./",
@@ -36,8 +36,16 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() =>
-        caches.match(event.request).then((cached) => cached || caches.match("./index.html"))
-      )
+      .catch(() => {
+        const url = new URL(event.request.url);
+        const sameOrigin = url.origin === self.location.origin;
+        return caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          if (sameOrigin && event.request.mode === "navigate") {
+            return caches.match("./index.html");
+          }
+          return Response.error();
+        });
+      })
   );
 });
