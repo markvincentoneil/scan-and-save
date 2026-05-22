@@ -173,6 +173,11 @@
       color: var(--text);
     }
 
+    .btn-reebee {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: #fff;
+    }
+
     .btn-flipp {
       background: linear-gradient(135deg, #0ea5e9, #3b82f6);
       color: #fff;
@@ -375,11 +380,11 @@
     <textarea id="searchText" rows="2"></textarea>
     <p class="meta" id="productMeta"></p>
 
-    <button type="button" class="btn btn-primary-action hidden" id="btnPrimaryFlyer">Copy &amp; open Flipp</button>
+    <button type="button" class="btn btn-reebee" id="btnReebee">Copy &amp; open Reebee app</button>
+    <button type="button" class="btn btn-flipp" id="btnFlipp">Search on Flipp.com</button>
+    <button type="button" class="btn btn-google" id="btnGoogleFlyer">Search on Google (flyers)</button>
     <button type="button" class="btn btn-secondary" id="btnShorten">Shorten for flyers</button>
     <button type="button" class="btn btn-secondary" id="btnCopy">Copy search text</button>
-    <button type="button" class="btn btn-flipp" id="btnFlipp" data-flyer="flipp">Search on Flipp.com</button>
-    <button type="button" class="btn btn-google" id="btnGoogleFlyer" data-flyer="google">Search on Google (flyers)</button>
     <a class="btn btn-secondary" id="btnReebeeStore" href="https://apps.apple.com/app/id558297215" target="_blank" rel="noopener noreferrer" style="text-align: center; text-decoration: none; display: block;">Get Reebee on the App Store</a>
     <button type="button" class="btn btn-secondary" id="btnScanAgain">Scan another item</button>
     <div id="actionStatus" class="status hidden"></div>
@@ -402,6 +407,7 @@
       <label class="row"><input type="checkbox" id="setSourceUpcDev" /> Lookup: upc.dev (often slow)</label>
       <label for="setPreferredFlyer">Primary flyer button</label>
       <select id="setPreferredFlyer">
+        <option value="reebee">Copy &amp; open Reebee</option>
         <option value="flipp">Copy &amp; open Flipp</option>
         <option value="google">Google (flyers)</option>
       </select>
@@ -430,6 +436,63 @@
       return "https://www.google.com/search?q=" + q + "+grocery+flyer+canada";
     }
 
+    const REEBEE_RETURN_URL_KEY = "scan-and-save-v2-return-url";
+    const REEBEE_LAUNCH_SCHEME = "com.reebee.reebee://";
+
+    function isReebeeSchemePage() {
+      return window.location.href.indexOf("com.reebee") !== -1;
+    }
+
+    function restoreAppPageAfterReebee() {
+      try {
+        const returnUrl = sessionStorage.getItem(REEBEE_RETURN_URL_KEY);
+        if (!returnUrl) return;
+        if (isReebeeSchemePage()) {
+          sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
+          location.replace(returnUrl);
+          return;
+        }
+        if (window.location.href.indexOf("index.html") !== -1) {
+          sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
+        }
+      } catch (e) {
+        console.debug("restoreAppPageAfterReebee", e);
+      }
+    }
+
+    function openReebeeApp() {
+      return new Promise(function (resolve) {
+        let settled = false;
+        let sawHidden = false;
+
+        function finish(opened) {
+          if (settled) return;
+          settled = true;
+          resolve(opened);
+        }
+
+        try {
+          sessionStorage.setItem(REEBEE_RETURN_URL_KEY, window.location.href);
+        } catch (e) {}
+
+        const onVisibility = function () {
+          if (document.hidden) {
+            sawHidden = true;
+          } else {
+            restoreAppPageAfterReebee();
+          }
+        };
+        document.addEventListener("visibilitychange", onVisibility);
+
+        window.location.href = REEBEE_LAUNCH_SCHEME;
+
+        setTimeout(function () {
+          document.removeEventListener("visibilitychange", onVisibility);
+          finish(sawHidden);
+        }, 3500);
+      });
+    }
+
     const scannerWrap = document.getElementById("scannerWrap");
     const scanHint = document.getElementById("scanHint");
     const btnScan = document.getElementById("btnScan");
@@ -443,6 +506,7 @@
     const searchText = document.getElementById("searchText");
     const productMeta = document.getElementById("productMeta");
     const btnCopy = document.getElementById("btnCopy");
+    const btnReebee = document.getElementById("btnReebee");
     const btnFlipp = document.getElementById("btnFlipp");
     const btnGoogleFlyer = document.getElementById("btnGoogleFlyer");
     const btnScanAgain = document.getElementById("btnScanAgain");
@@ -458,7 +522,6 @@
     const setSourceUpcDev = document.getElementById("setSourceUpcDev");
     const setPreferredFlyer = document.getElementById("setPreferredFlyer");
     const productImage = document.getElementById("productImage");
-    const btnPrimaryFlyer = document.getElementById("btnPrimaryFlyer");
     const btnShorten = document.getElementById("btnShorten");
     const btnReadLabel = document.getElementById("btnReadLabel");
     const updateBanner = document.getElementById("updateBanner");
@@ -600,10 +663,6 @@
     }
 
     function applySettingsToUI() {
-      if (appSettings.preferredFlyer === "reebee") {
-        appSettings.preferredFlyer = "flipp";
-        saveSettings();
-      }
       setAutoScan.checked = appSettings.autoScan;
       setSourceOpenFacts.checked = appSettings.openFacts;
       setSourceOpenProducts.checked = appSettings.openProducts;
@@ -633,12 +692,19 @@
 
     function applyPrimaryFlyerButton() {
       const pref = appSettings.preferredFlyer || "flipp";
-      const labels = {
-        flipp: "Copy & open Flipp",
-        google: "Search on Google (flyers)",
-      };
-      btnPrimaryFlyer.textContent = labels[pref] || labels.flipp;
-      btnPrimaryFlyer.dataset.flyer = pref;
+      const flyerButtons = [
+        { id: "reebee", el: btnReebee },
+        { id: "flipp", el: btnFlipp },
+        { id: "google", el: btnGoogleFlyer },
+      ];
+      flyerButtons.forEach(function (item) {
+        item.el.classList.remove("btn-primary-action");
+      });
+      const primary =
+        flyerButtons.find(function (item) {
+          return item.id === pref;
+        }) || flyerButtons[1];
+      primary.el.classList.add("btn-primary-action");
     }
 
     function showProductImage(url) {
@@ -1322,7 +1388,6 @@
         setLiveProduct(result.display, "found");
         const via = result.source ? " (" + result.source + ")" : "";
         showStatus(scanStatus, "Found" + via + ": " + result.display, "ok");
-        btnPrimaryFlyer.classList.remove("hidden");
       } else {
         setLiveProduct("No name found — UPC " + code, "warn");
         showStatus(
@@ -1330,7 +1395,6 @@
           "Not in any database — edit the text, use Read label (OCR), or search by number.",
           "warn"
         );
-        btnPrimaryFlyer.classList.remove("hidden");
       }
     }
 
@@ -1692,7 +1756,6 @@
         searchText.value = best;
         setLiveProduct(best, "found");
         showStatus(scanStatus, "Label read — check the text and edit if needed.", "ok");
-        btnPrimaryFlyer.classList.remove("hidden");
 
         if (lastBarcode) {
           productMeta.textContent = "UPC " + lastBarcode + " · from label (OCR)";
@@ -1706,10 +1769,35 @@
       }
     }
 
-    async function handlePrimaryFlyer() {
-      const pref = btnPrimaryFlyer.dataset.flyer || appSettings.preferredFlyer || "flipp";
-      if (pref === "google") await handleGoogleFlyer();
-      else await handleFlipp();
+    async function handleReebee() {
+      const text = searchText.value.trim();
+      if (!text) {
+        showStatus(actionStatus, "Enter or scan something first.", "warn");
+        return;
+      }
+
+      try {
+        await copyText(text);
+      } catch (e) {
+        showStatus(actionStatus, "Could not copy — paste manually in Reebee.", "warn");
+      }
+
+      const opened = await openReebeeApp();
+      if (opened) {
+        showStatus(
+          actionStatus,
+          "Opened Reebee — long-press search and Paste (already copied).",
+          "ok"
+        );
+        return;
+      }
+
+      restoreAppPageAfterReebee();
+      showStatus(
+        actionStatus,
+        "Copied. Open Reebee from your home screen, then paste in search. (Tap Open if Safari asks.)",
+        "ok"
+      );
     }
 
     btnToggleSettings.addEventListener("click", function () {
@@ -1735,7 +1823,6 @@
       showStatus(actionStatus, "Shortened for flyer search.", "ok");
     });
 
-    btnPrimaryFlyer.addEventListener("click", handlePrimaryFlyer);
     btnReadLabel.addEventListener("click", readLabelFromCamera);
 
     btnReloadApp.addEventListener("click", function () {
@@ -1756,6 +1843,7 @@
       processBarcode(code);
     });
     btnCopy.addEventListener("click", handleCopy);
+    btnReebee.addEventListener("click", handleReebee);
     btnFlipp.addEventListener("click", handleFlipp);
     btnGoogleFlyer.addEventListener("click", handleGoogleFlyer);
     btnScanAgain.addEventListener("click", () => {
@@ -1772,8 +1860,15 @@
     });
 
     document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) restoreAppPageAfterReebee();
       if (document.hidden && isScanning) stopCamera();
     });
+
+    window.addEventListener("pageshow", function () {
+      restoreAppPageAfterReebee();
+    });
+
+    restoreAppPageAfterReebee();
 
     if (appVersionEl) appVersionEl.textContent = "v" + APP_VERSION;
     applySettingsToUI();
