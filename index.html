@@ -193,6 +193,11 @@
       color: #fff;
     }
 
+    .btn-goupc {
+      background: linear-gradient(135deg, #0d9488, #14b8a6);
+      color: #fff;
+    }
+
     .btn:disabled {
       opacity: 0.45;
       cursor: not-allowed;
@@ -425,6 +430,7 @@
     <button type="button" class="btn btn-flipp" id="btnFlipp">Search on Flipp.com</button>
     <button type="button" class="btn btn-google" id="btnGoogleFlyer">Search on Google (flyers)</button>
     <button type="button" class="btn btn-raddar" id="btnRaddar">Search on Raddar.ca</button>
+    <button type="button" class="btn btn-goupc" id="btnGoUpc">Search on Go-UPC</button>
     <button type="button" class="btn btn-secondary" id="btnCopy">Copy search text</button>
     <a class="btn btn-secondary" id="btnReebeeStore" href="https://apps.apple.com/app/id558297215" target="_blank" rel="noopener noreferrer" style="text-align: center; text-decoration: none; display: block;">Get Reebee on the App Store</a>
     <button type="button" class="btn btn-secondary" id="btnScanAgain">Scan another item</button>
@@ -447,20 +453,20 @@
       <label class="row"><input type="checkbox" id="setAutoScan" checked /> Auto-scan when barcode is in focus</label>
       <label class="row"><input type="checkbox" id="setSourceOpenFacts" checked /> Lookup: Open Facts (all types)</label>
       <label class="row"><input type="checkbox" id="setSourceOpenProducts" checked /> Lookup: Open Products Facts</label>
-      <label class="row"><input type="checkbox" id="setGoUpc" /> Lookup: Go-UPC (needs API key)</label>
-      <label for="setGoUpcApiKey">Go-UPC API key</label>
-      <input type="password" id="setGoUpcApiKey" autocomplete="off" placeholder="Paste key from go-upc.com" />
+      <label class="row"><input type="checkbox" id="setGoUpc" checked /> Lookup: Go-UPC (search page URL)</label>
+      <label for="setGoUpcApiKey">Go-UPC API key (optional)</label>
+      <input type="password" id="setGoUpcApiKey" autocomplete="off" placeholder="Optional — faster JSON lookup" />
       <p class="settings-hint">
-        Free tier: 5,000 lookups/month.
-        <a href="https://go-upc.com/docs" target="_blank" rel="noopener">Get a key</a>
-        · example:
-        <a href="https://go-upc.com/search?q=060410017227" target="_blank" rel="noopener">Ruffles test UPC</a>
+        Uses <code>go-upc.com/search?q=</code> + barcode (no key required for the website button).
+        Auto-lookup from that page may be blocked on iPhone; API key helps if you have one.
+        <a href="https://go-upc.com/search?q=060410017227" target="_blank" rel="noopener">Example search</a>
+        · <a href="https://go-upc.com/docs" target="_blank" rel="noopener">API docs</a>
       </p>
       <label class="row"><input type="checkbox" id="setSourceUpcDev" /> Lookup: upc.dev (often slow)</label>
       <label class="row"><input type="checkbox" id="setParallelLookup" /> Try all sources at once (parallel)</label>
       <label>UPC lookup order (first tried → last)</label>
       <ul id="sourceOrderList" class="source-order-list"></ul>
-      <p class="settings-hint">Turn off parallel to test order one at a time. Put Go-UPC first for English names when you have a key.</p>
+      <p class="settings-hint">Turn off parallel to test order one at a time. Put Go-UPC first for English names (e.g. Ruffles test UPC).</p>
       <label for="setPreferredFlyer">Primary flyer button</label>
       <select id="setPreferredFlyer">
         <option value="reebee">Copy &amp; open Reebee</option>
@@ -572,6 +578,7 @@
     const btnFlipp = document.getElementById("btnFlipp");
     const btnGoogleFlyer = document.getElementById("btnGoogleFlyer");
     const btnRaddar = document.getElementById("btnRaddar");
+    const btnGoUpc = document.getElementById("btnGoUpc");
     const btnScanAgain = document.getElementById("btnScanAgain");
     const actionStatus = document.getElementById("actionStatus");
     const liveProductLabel = document.getElementById("liveProductLabel");
@@ -658,17 +665,7 @@
         id: "goupc",
         label: "Go-UPC",
         settingKey: "goUpc",
-        buildUrl(code) {
-          const key = encodeURIComponent((appSettings.goUpcApiKey || "").trim());
-          if (!key) return "";
-          return (
-            "https://go-upc.com/api/v1/code/" +
-            encodeURIComponent(code) +
-            "?key=" +
-            key
-          );
-        },
-        parse: parseGoUpcResponse,
+        lookup: lookupGoUpc,
       },
       {
         id: "upcdev",
@@ -690,7 +687,7 @@
         autoScan: true,
         openFacts: true,
         openProducts: true,
-        goUpc: false,
+        goUpc: true,
         goUpcApiKey: "",
         upcDev: false,
         parallelLookup: false,
@@ -714,13 +711,12 @@
     }
 
     function isSourceEnabled(def) {
-      if (def.id === "goupc") {
-        return (
-          appSettings.goUpc !== false &&
-          String(appSettings.goUpcApiKey || "").trim().length > 0
-        );
-      }
       return appSettings[def.settingKey] !== false;
+    }
+
+    function goUpcSearchUrl(query) {
+      const q = encodeURIComponent(String(query).trim());
+      return "https://go-upc.com/search?q=" + q;
     }
 
     function getLookupDefById(id) {
@@ -1395,6 +1391,22 @@
       }
     }
 
+    async function fetchTextWithTimeout(url, timeoutMs) {
+      const ms = timeoutMs || LOOKUP_FETCH_MS;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), ms);
+      try {
+        const res = await fetch(url, { signal: ctrl.signal });
+        if (!res.ok) return null;
+        return await res.text();
+      } catch (err) {
+        console.debug("fetchTextWithTimeout", url, err);
+        return null;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     function pickProductImageUrl(product) {
       if (!product) return "";
       return (
@@ -1483,6 +1495,62 @@
       };
     }
 
+    function parseGoUpcSearchHtml(html, code, sourceLabel) {
+      if (!html) return null;
+      const h1 = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+      if (h1 && h1[1]) {
+        const name = h1[1].trim().replace(/\s+/g, " ");
+        if (name.length > 2) {
+          return {
+            found: true,
+            searchName: name,
+            display: name,
+            meta: "UPC " + code + " · " + sourceLabel,
+            source: sourceLabel,
+          };
+        }
+      }
+      const title = html.match(/<title>([^<]+)<\/title>/i);
+      if (title && title[1]) {
+        const name = title[1]
+          .split(" - UPC")[0]
+          .split(" — UPC")[0]
+          .trim();
+        if (name.length > 2 && !/go-upc/i.test(name)) {
+          return {
+            found: true,
+            searchName: name,
+            display: name,
+            meta: "UPC " + code + " · " + sourceLabel,
+            source: sourceLabel,
+          };
+        }
+      }
+      return null;
+    }
+
+    async function lookupGoUpc(code) {
+      const key = String(appSettings.goUpcApiKey || "").trim();
+      if (key) {
+        const apiUrl =
+          "https://go-upc.com/api/v1/code/" +
+          encodeURIComponent(code) +
+          "?key=" +
+          encodeURIComponent(key);
+        const data = await fetchJsonWithTimeout(apiUrl);
+        const apiResult = data && parseGoUpcResponse(data, code, "Go-UPC API");
+        if (apiResult && apiResult.found) return apiResult;
+      }
+
+      const html = await fetchTextWithTimeout(goUpcSearchUrl(code));
+      if (html) {
+        const webResult = parseGoUpcSearchHtml(html, code, "Go-UPC");
+        if (webResult && webResult.found) return webResult;
+      }
+
+      return null;
+    }
+
     function getActiveLookupSources() {
       const order = normalizeSourceOrder(appSettings.sourceOrder);
       return order
@@ -1495,6 +1563,9 @@
     }
 
     async function lookupFromSource(source, code) {
+      if (source.lookup) {
+        return source.lookup(code);
+      }
       const url = source.buildUrl(code);
       if (!url) return null;
       const data = await fetchJsonWithTimeout(url, source.timeoutMs);
@@ -1938,6 +2009,15 @@
       await openWebFlyerSearch(raddarSearchUrl, "Raddar.ca");
     }
 
+    async function handleGoUpc() {
+      const text = searchText.value.trim() || lastBarcode || "";
+      if (!text) {
+        showStatus(actionStatus, "Enter or scan something first.", "warn");
+        return;
+      }
+      await openWebFlyerSearch(goUpcSearchUrl, "Go-UPC");
+    }
+
     async function readLabelFromCamera() {
       const video = getScannerVideo();
       if (!video || video.readyState < 2) {
@@ -2081,6 +2161,7 @@
     btnFlipp.addEventListener("click", handleFlipp);
     btnGoogleFlyer.addEventListener("click", handleGoogleFlyer);
     btnRaddar.addEventListener("click", handleRaddar);
+    btnGoUpc.addEventListener("click", handleGoUpc);
     btnScanAgain.addEventListener("click", () => {
       hideStatus(actionStatus);
       resultCard.classList.add("hidden");
