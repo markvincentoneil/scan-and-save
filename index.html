@@ -61,12 +61,12 @@
       border-radius: 10px;
       overflow: hidden;
       background: #000;
-      min-height: 280px;
+      min-height: 140px;
     }
 
     #reader {
       width: 100%;
-      min-height: 280px;
+      min-height: 140px;
     }
 
     #reader video {
@@ -74,7 +74,8 @@
       width: 100% !important;
       max-width: 100% !important;
       height: auto !important;
-      min-height: 240px !important;
+      min-height: 120px !important;
+      max-height: 140px !important;
       object-fit: cover;
     }
 
@@ -408,12 +409,12 @@
     </div>
     <button type="button" class="btn btn-primary" id="btnScan">Start camera</button>
     <button type="button" class="btn btn-capture hidden" id="btnCapture">Scan now (when barcode is in focus)</button>
+    <button type="button" class="btn btn-secondary" id="btnReadLabel">Read product name from label (OCR)</button>
     <button type="button" class="btn btn-torch hidden" id="btnTorch">Flashlight on</button>
     <button type="button" class="btn btn-secondary hidden" id="btnStop">Stop camera</button>
     <label for="manualBarcode" style="margin-top: 14px;">Or type barcode manually</label>
     <input type="text" id="manualBarcode" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 0662900001234" />
     <button type="button" class="btn btn-secondary" id="btnManual">Look up this barcode</button>
-    <button type="button" class="btn btn-secondary" id="btnReadLabel">Read product name from label (OCR)</button>
     <div id="scanStatus" class="status info hidden"></div>
     <p class="scan-hint" id="cameraHelp" style="margin-top: 12px;">
       <strong>Camera blocked?</strong> iPhone: Settings → Safari → Camera → <strong>Allow</strong>,
