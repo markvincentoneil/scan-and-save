@@ -450,6 +450,7 @@
     }
 
     const REEBEE_RETURN_URL_KEY = "scan-and-save-v2-return-url";
+    const LAST_SCAN_KEY = "scan-and-save-v2-last-scan";
     const REEBEE_LAUNCH_SCHEME = "com.reebee.reebee://";
 
     function isReebeeSchemePage() {
@@ -790,6 +791,77 @@
       lastScanAt = 0;
       lookupInFlight = false;
       autoScanStreak = { code: null, count: 0 };
+      lastLookupResult = null;
+      clearLastScanState();
+    }
+
+    function getLiveProductState() {
+      if (liveProductName.classList.contains("warn")) return "warn";
+      if (liveProductName.classList.contains("looking")) return "looking";
+      if (liveProductName.classList.contains("found")) return "found";
+      return "";
+    }
+
+    function saveLastScanState() {
+      if (!lastBarcode) return;
+      try {
+        sessionStorage.setItem(
+          LAST_SCAN_KEY,
+          JSON.stringify({
+            barcode: lastBarcode,
+            searchText: searchText.value,
+            productMeta: productMeta.textContent,
+            liveProduct: liveProductName.value,
+            liveState: getLiveProductState(),
+            imageUrl: productImage.src && !productImage.classList.contains("hidden") ? productImage.src : "",
+            result: lastLookupResult,
+            at: lastScanAt || Date.now(),
+          })
+        );
+      } catch (e) {
+        console.debug("saveLastScanState", e);
+      }
+    }
+
+    function restoreLastScanState() {
+      try {
+        const raw = sessionStorage.getItem(LAST_SCAN_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!data || !data.barcode) return false;
+
+        lastBarcode = data.barcode;
+        lastScanAt = data.at || Date.now();
+        lastLookupResult = data.result || null;
+        searchText.value = data.searchText || "";
+        productMeta.textContent = data.productMeta || "UPC " + data.barcode;
+        manualBarcode.value = data.barcode;
+        resultCard.classList.remove("hidden");
+
+        if (data.imageUrl) {
+          showProductImage(data.imageUrl);
+        } else {
+          showProductImage("");
+        }
+
+        if (data.liveProduct) {
+          showLiveProductUI();
+          setLiveProduct(data.liveProduct, data.liveState || "found");
+        }
+
+        return true;
+      } catch (e) {
+        console.debug("restoreLastScanState", e);
+        return false;
+      }
+    }
+
+    function clearLastScanState() {
+      try {
+        sessionStorage.removeItem(LAST_SCAN_KEY);
+      } catch (e) {
+        /* ignore */
+      }
     }
 
     function showLiveProductUI() {
@@ -1425,6 +1497,7 @@
           "warn"
         );
       }
+      saveLastScanState();
     }
 
     function normalizeBarcode(raw) {
@@ -1539,7 +1612,17 @@
       scannerWrap.classList.remove("hidden");
       scanHint.classList.remove("hidden");
       showLiveProductUI();
-      clearLiveProduct();
+      if (lastBarcode) {
+        const label =
+          (lastLookupResult && lastLookupResult.display) ||
+          searchText.value.trim() ||
+          "UPC " + lastBarcode;
+        const state =
+          lastLookupResult && lastLookupResult.found === false ? "warn" : "found";
+        setLiveProduct(label, state);
+      } else {
+        clearLiveProduct();
+      }
       showStatus(scanStatus, "Starting camera…", "info");
 
       try {
@@ -1648,7 +1731,9 @@
       clearReaderElement();
       scannerWrap.classList.add("hidden");
       scanHint.classList.add("hidden");
-      hideLiveProductUI();
+      if (!lastBarcode) {
+        hideLiveProductUI();
+      }
       btnCapture.classList.add("hidden");
       btnTorch.classList.add("hidden");
       torchOn = false;
@@ -1805,6 +1890,7 @@
         showStatus(actionStatus, "Could not copy — paste manually in Reebee.", "warn");
       }
 
+      saveLastScanState();
       const opened = await openReebeeApp();
       if (opened) {
         showStatus(
@@ -1881,6 +1967,7 @@
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden) {
         restoreAppPageAfterReebee();
+        restoreLastScanState();
         if (resumeCameraOnShow && appSettings.autoStartCamera !== false) {
           resumeCameraOnShow = false;
           startCamera();
@@ -1895,9 +1982,11 @@
 
     window.addEventListener("pageshow", function () {
       restoreAppPageAfterReebee();
+      restoreLastScanState();
     });
 
     restoreAppPageAfterReebee();
+    restoreLastScanState();
 
     if (appVersionEl) appVersionEl.textContent = "v" + APP_VERSION;
     applySettingsToUI();
