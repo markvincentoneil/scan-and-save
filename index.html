@@ -444,8 +444,60 @@
       return "https://www.google.com/search?q=" + q + "+grocery+flyer+canada";
     }
 
+    const REEBEE_RETURN_URL_KEY = "scan-and-save-v2-return-url";
+
+    function isReebeeSchemePage() {
+      const href = window.location.href;
+      return href.indexOf("com.reebee") !== -1;
+    }
+
+    function restoreAppPageAfterReebee() {
+      try {
+        const returnUrl = sessionStorage.getItem(REEBEE_RETURN_URL_KEY);
+        if (!returnUrl || !isReebeeSchemePage()) return;
+        sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
+        location.replace(returnUrl);
+      } catch (e) {
+        console.debug("restoreAppPageAfterReebee", e);
+      }
+    }
+
     function openReebeeApp() {
-      window.location.href = REEBEE_APP_SCHEME;
+      return new Promise(function (resolve) {
+        let settled = false;
+        function finish(appOpened) {
+          if (settled) return;
+          settled = true;
+          resolve(appOpened);
+        }
+
+        try {
+          sessionStorage.setItem(REEBEE_RETURN_URL_KEY, window.location.href);
+        } catch (e) {}
+
+        const onVisibility = function () {
+          if (document.hidden) {
+            document.removeEventListener("visibilitychange", onVisibility);
+            finish(true);
+          }
+        };
+        document.addEventListener("visibilitychange", onVisibility);
+
+        const iframe = document.createElement("iframe");
+        iframe.setAttribute("aria-hidden", "true");
+        iframe.style.cssText =
+          "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0;";
+        iframe.src = REEBEE_APP_SCHEME;
+        document.body.appendChild(iframe);
+
+        setTimeout(function () {
+          document.removeEventListener("visibilitychange", onVisibility);
+          try {
+            if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+          } catch (e) {}
+          finish(false);
+        }, 1200);
+      });
     }
 
     function reebeeWebSearchUrl(searchText) {
@@ -1745,25 +1797,34 @@
         showStatus(actionStatus, "Could not copy — paste manually in Reebee.", "warn");
       }
 
-      openReebeeApp();
-
-      setTimeout(function () {
-        if (document.hidden) {
-          showStatus(
-            actionStatus,
-            "Opened Reebee — long-press search and Paste (already copied).",
-            "ok"
-          );
-          return;
-        }
-
-        window.location.href = reebeeWebSearchUrl(text);
+      const opened = await openReebeeApp();
+      if (opened) {
         showStatus(
           actionStatus,
-          "Reebee app did not open — opened reebee.com instead. Install from App Store if needed.",
+          "Opened Reebee — long-press search and Paste (already copied).",
+          "ok"
+        );
+        return;
+      }
+
+      try {
+        sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
+      } catch (e) {}
+
+      const tab = window.open(reebeeWebSearchUrl(text), "_blank", "noopener,noreferrer");
+      if (tab) {
+        showStatus(
+          actionStatus,
+          "Reebee app did not open — opened reebee.com in a new tab. Paste your search there.",
           "warn"
         );
-      }, 900);
+      } else {
+        showStatus(
+          actionStatus,
+          "Copy is ready — open Reebee from your home screen and paste in search.",
+          "warn"
+        );
+      }
     }
 
     btnToggleSettings.addEventListener("click", function () {
@@ -1840,9 +1901,12 @@
       }
     });
 
-    document.addEventListener("visibilitychange", () => {
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) restoreAppPageAfterReebee();
       if (document.hidden && isScanning) stopCamera();
     });
+
+    restoreAppPageAfterReebee();
 
     if (appVersionEl) appVersionEl.textContent = "v" + APP_VERSION;
     applySettingsToUI();
