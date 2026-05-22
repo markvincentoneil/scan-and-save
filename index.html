@@ -188,6 +188,11 @@
       color: #fff;
     }
 
+    .btn-raddar {
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      color: #fff;
+    }
+
     .btn:disabled {
       opacity: 0.45;
       cursor: not-allowed;
@@ -383,7 +388,7 @@
     <button type="button" class="btn btn-reebee" id="btnReebee">Copy &amp; open Reebee app</button>
     <button type="button" class="btn btn-flipp" id="btnFlipp">Search on Flipp.com</button>
     <button type="button" class="btn btn-google" id="btnGoogleFlyer">Search on Google (flyers)</button>
-    <button type="button" class="btn btn-secondary" id="btnShorten">Shorten for flyers</button>
+    <button type="button" class="btn btn-raddar" id="btnRaddar">Search on Raddar.ca</button>
     <button type="button" class="btn btn-secondary" id="btnCopy">Copy search text</button>
     <a class="btn btn-secondary" id="btnReebeeStore" href="https://apps.apple.com/app/id558297215" target="_blank" rel="noopener noreferrer" style="text-align: center; text-decoration: none; display: block;">Get Reebee on the App Store</a>
     <button type="button" class="btn btn-secondary" id="btnScanAgain">Scan another item</button>
@@ -394,6 +399,7 @@
     <strong style="font-size: 0.95rem;">Tips</strong>
     <ol class="steps">
       <li>Web and app searches <strong>copy</strong> the product name first — paste if the search box is empty (long-press → Paste).</li>
+      <li>Camera access is asked <strong>once per website</strong> (use the same HTTPS link / home-screen icon each time). Set <strong>Allow</strong> in Settings → Safari → Camera.</li>
       <li>Accept the certificate warning the first time you open your computer’s HTTPS link.</li>
     </ol>
   </div>
@@ -401,6 +407,7 @@
   <div class="card">
     <button type="button" class="btn-collapse" id="btnToggleSettings" aria-expanded="false">Settings ▾</button>
     <div id="settingsBody" class="settings-grid hidden">
+      <label class="row"><input type="checkbox" id="setAutoStartCamera" checked /> Start camera automatically when app opens</label>
       <label class="row"><input type="checkbox" id="setAutoScan" checked /> Auto-scan when barcode is in focus</label>
       <label class="row"><input type="checkbox" id="setSourceOpenFacts" checked /> Lookup: Open Facts (all types)</label>
       <label class="row"><input type="checkbox" id="setSourceOpenProducts" checked /> Lookup: Open Products Facts</label>
@@ -434,6 +441,11 @@
     function googleFlyerSearchUrl(searchText) {
       const q = encodeURIComponent(searchText.trim());
       return "https://www.google.com/search?q=" + q + "+grocery+flyer+canada";
+    }
+
+    function raddarSearchUrl(searchText) {
+      const q = encodeURIComponent(searchText.trim());
+      return "https://raddar.ca/en/search?q=" + q;
     }
 
     const REEBEE_RETURN_URL_KEY = "scan-and-save-v2-return-url";
@@ -509,6 +521,7 @@
     const btnReebee = document.getElementById("btnReebee");
     const btnFlipp = document.getElementById("btnFlipp");
     const btnGoogleFlyer = document.getElementById("btnGoogleFlyer");
+    const btnRaddar = document.getElementById("btnRaddar");
     const btnScanAgain = document.getElementById("btnScanAgain");
     const actionStatus = document.getElementById("actionStatus");
     const liveProductLabel = document.getElementById("liveProductLabel");
@@ -516,13 +529,13 @@
     const captureFlash = document.getElementById("captureFlash");
     const btnToggleSettings = document.getElementById("btnToggleSettings");
     const settingsBody = document.getElementById("settingsBody");
+    const setAutoStartCamera = document.getElementById("setAutoStartCamera");
     const setAutoScan = document.getElementById("setAutoScan");
     const setSourceOpenFacts = document.getElementById("setSourceOpenFacts");
     const setSourceOpenProducts = document.getElementById("setSourceOpenProducts");
     const setSourceUpcDev = document.getElementById("setSourceUpcDev");
     const setPreferredFlyer = document.getElementById("setPreferredFlyer");
     const productImage = document.getElementById("productImage");
-    const btnShorten = document.getElementById("btnShorten");
     const btnReadLabel = document.getElementById("btnReadLabel");
     const updateBanner = document.getElementById("updateBanner");
     const btnReloadApp = document.getElementById("btnReloadApp");
@@ -530,6 +543,8 @@
 
     let appSettings = loadSettings();
     let lastLookupResult = null;
+    let resumeCameraOnShow = false;
+    let autoStartAttempted = false;
 
     let scanner = null;
     let isScanning = false;
@@ -545,9 +560,6 @@
     const AUTO_SCAN_INTERVAL_MS = 250;
     const AUTO_SCAN_MATCHES = 2;
     const AUTO_SCAN_SHARPNESS_MIN = 35;
-
-    const FLYER_FILLER =
-      /\b(organic|natural|premium|artisan|fair\s*trade|gluten\s*free|non[\s-]*gmo|new\s+look|family\s+size|value\s+size)\b/gi;
 
     const OFF_PRODUCT_FIELDS =
       "product_name,product_name_en,generic_name,brands,quantity,image_url,image_front_url,image_front_small_url";
@@ -597,6 +609,7 @@
 
     function defaultSettings() {
       return {
+        autoStartCamera: true,
         autoScan: true,
         openFacts: true,
         openProducts: true,
@@ -663,6 +676,7 @@
     }
 
     function applySettingsToUI() {
+      setAutoStartCamera.checked = appSettings.autoStartCamera !== false;
       setAutoScan.checked = appSettings.autoScan;
       setSourceOpenFacts.checked = appSettings.openFacts;
       setSourceOpenProducts.checked = appSettings.openProducts;
@@ -672,6 +686,7 @@
     }
 
     function readSettingsFromUI() {
+      appSettings.autoStartCamera = setAutoStartCamera.checked;
       appSettings.autoScan = setAutoScan.checked;
       appSettings.openFacts = setSourceOpenFacts.checked;
       appSettings.openProducts = setSourceOpenProducts.checked;
@@ -715,22 +730,6 @@
       }
       productImage.src = url;
       productImage.classList.remove("hidden");
-    }
-
-    function shortenForFlyers(text) {
-      let t = String(text).trim();
-      t = t.replace(FLYER_FILLER, " ").replace(/\s+/g, " ").trim();
-      const sizeMatch = t.match(
-        /\b(\d+(\.\d+)?\s*(ml|l|g|kg|oz|lb|pack|pk|ct|count))\b/i
-      );
-      if (t.length > 55) {
-        const words = t.split(/\s+/);
-        t = words.slice(0, Math.min(8, words.length)).join(" ");
-      }
-      if (sizeMatch && !t.toLowerCase().includes(sizeMatch[0].toLowerCase())) {
-        t = (t + " " + sizeMatch[0]).trim();
-      }
-      return t;
     }
 
     function barcodeVariants(raw) {
@@ -933,19 +932,24 @@
       return msg || "Could not start the camera.";
     }
 
-    async function requestCameraPermission() {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Camera is not supported in this browser.");
+    async function isCameraPermissionDenied() {
+      if (!navigator.permissions || !navigator.permissions.query) return false;
+      try {
+        const status = await navigator.permissions.query({ name: "camera" });
+        return status.state === "denied";
+      } catch (e) {
+        return false;
       }
+    }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
+    async function maybeAutoStartCamera() {
+      if (autoStartAttempted || isScanning) return;
+      if (appSettings.autoStartCamera === false) return;
+      if (!window.isSecureContext) return;
+      if (await isCameraPermissionDenied()) return;
 
-      stream.getTracks().forEach(function (track) {
-        track.stop();
-      });
+      autoStartAttempted = true;
+      startCamera();
     }
 
     async function applyFocusHelper() {
@@ -1513,16 +1517,7 @@
       scanHint.classList.remove("hidden");
       showLiveProductUI();
       clearLiveProduct();
-      showStatus(scanStatus, "Requesting camera access…", "info");
-
-      try {
-        await requestCameraPermission();
-      } catch (permErr) {
-        await stopCamera();
-        showStatus(scanStatus, describeCameraError(permErr), "err");
-        console.error(permErr);
-        return;
-      }
+      showStatus(scanStatus, "Starting camera…", "info");
 
       try {
         scanner = new Html5Qrcode("reader", { verbose: false });
@@ -1597,6 +1592,7 @@
         btnStop.classList.remove("hidden");
       } catch (err) {
         await stopCamera();
+        btnScan.disabled = false;
         showStatus(scanStatus, describeCameraError(err), "err");
         console.error(err);
       }
@@ -1704,6 +1700,10 @@
       await openWebFlyerSearch(googleFlyerSearchUrl, "Google");
     }
 
+    async function handleRaddar() {
+      await openWebFlyerSearch(raddarSearchUrl, "Raddar.ca");
+    }
+
     async function readLabelFromCamera() {
       const video = getScannerVideo();
       if (!video || video.readyState < 2) {
@@ -1807,21 +1807,11 @@
       btnToggleSettings.textContent = collapsed ? "Settings ▾" : "Settings ▴";
     });
 
-    [setAutoScan, setSourceOpenFacts, setSourceOpenProducts, setSourceUpcDev, setPreferredFlyer].forEach(
+    [setAutoStartCamera, setAutoScan, setSourceOpenFacts, setSourceOpenProducts, setSourceUpcDev, setPreferredFlyer].forEach(
       function (el) {
         el.addEventListener("change", readSettingsFromUI);
       }
     );
-
-    btnShorten.addEventListener("click", function () {
-      const t = searchText.value.trim();
-      if (!t) {
-        showStatus(actionStatus, "Nothing to shorten.", "warn");
-        return;
-      }
-      searchText.value = shortenForFlyers(t);
-      showStatus(actionStatus, "Shortened for flyer search.", "ok");
-    });
 
     btnReadLabel.addEventListener("click", readLabelFromCamera);
 
@@ -1846,6 +1836,7 @@
     btnReebee.addEventListener("click", handleReebee);
     btnFlipp.addEventListener("click", handleFlipp);
     btnGoogleFlyer.addEventListener("click", handleGoogleFlyer);
+    btnRaddar.addEventListener("click", handleRaddar);
     btnScanAgain.addEventListener("click", () => {
       hideStatus(actionStatus);
       resultCard.classList.add("hidden");
@@ -1860,8 +1851,18 @@
     });
 
     document.addEventListener("visibilitychange", function () {
-      if (!document.hidden) restoreAppPageAfterReebee();
-      if (document.hidden && isScanning) stopCamera();
+      if (!document.hidden) {
+        restoreAppPageAfterReebee();
+        if (resumeCameraOnShow && appSettings.autoStartCamera !== false) {
+          resumeCameraOnShow = false;
+          startCamera();
+        }
+        return;
+      }
+      if (isScanning) {
+        resumeCameraOnShow = appSettings.autoStartCamera !== false;
+        stopCamera();
+      }
     });
 
     window.addEventListener("pageshow", function () {
@@ -1872,6 +1873,9 @@
 
     if (appVersionEl) appVersionEl.textContent = "v" + APP_VERSION;
     applySettingsToUI();
+    window.addEventListener("load", function () {
+      setTimeout(maybeAutoStartCamera, 400);
+    });
     try {
       localStorage.removeItem("scan-and-save-v2-fixes");
       localStorage.removeItem("scan-and-save-v2-history");
