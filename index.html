@@ -855,8 +855,7 @@
         autoScanBusy ||
         lookupInFlight ||
         btnCapture.disabled ||
-        !appSettings.autoScan ||
-        !resultCard.classList.contains("hidden")
+        !appSettings.autoScan
       ) {
         return;
       }
@@ -1487,8 +1486,6 @@
       }
 
       hideStatus(scanStatus);
-      resultCard.classList.add("hidden");
-      resetScanSession();
 
       if (!window.isSecureContext) {
         showStatus(
