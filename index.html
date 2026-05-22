@@ -320,7 +320,10 @@
   </div>
 
   <footer>
-    Product names from <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>
+    Product names from
+    <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>,
+    <a href="https://world.openproductsfacts.org" target="_blank" rel="noopener">Open Products Facts</a>, and
+    <a href="https://upc.dev" target="_blank" rel="noopener">upc.dev</a>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -825,19 +828,67 @@
       return name || generic || brand || "";
     }
 
-    async function lookupBarcode(code) {
-      const url =
-        "https://world.openfoodfacts.org/api/v2/product/" +
-        encodeURIComponent(code) +
-        "?fields=product_name,product_name_en,generic_name,brands,quantity";
+    const OFF_PRODUCT_FIELDS =
+      "product_name,product_name_en,generic_name,brands,quantity";
+    const LOOKUP_FETCH_MS = 8000;
+    const UPC_DEV_FETCH_MS = 5000;
 
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Lookup failed (" + res.status + ")");
-      const data = await res.json();
-      if (data.status !== 1 || !data.product) {
-        return { found: false, searchName: "", display: "Product not in Open Food Facts." };
+    const LOOKUP_SOURCES = [
+      {
+        id: "openfacts-all",
+        label: "Open Facts",
+        buildUrl(code) {
+          return (
+            "https://world.openfoodfacts.org/api/v2/product/" +
+            encodeURIComponent(code) +
+            "?product_type=all&fields=" +
+            OFF_PRODUCT_FIELDS
+          );
+        },
+        parse: parseOpenFactsResponse,
+      },
+      {
+        id: "openproducts",
+        label: "Open Products Facts",
+        buildUrl(code) {
+          return (
+            "https://world.openproductsfacts.org/api/v2/product/" +
+            encodeURIComponent(code) +
+            "?fields=" +
+            OFF_PRODUCT_FIELDS
+          );
+        },
+        parse: parseOpenFactsResponse,
+      },
+      {
+        id: "upcdev",
+        label: "upc.dev",
+        timeoutMs: UPC_DEV_FETCH_MS,
+        buildUrl(code) {
+          return "https://upc.dev/v1/product/" + encodeURIComponent(code);
+        },
+        parse: parseUpcDevResponse,
+      },
+    ];
+
+    async function fetchJsonWithTimeout(url, timeoutMs) {
+      const ms = timeoutMs || LOOKUP_FETCH_MS;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), ms);
+      try {
+        const res = await fetch(url, { signal: ctrl.signal });
+        if (!res.ok) return null;
+        return await res.json();
+      } catch (err) {
+        console.debug("fetchJsonWithTimeout", url, err);
+        return null;
+      } finally {
+        clearTimeout(timer);
       }
+    }
 
+    function parseOpenFactsResponse(data, code, sourceLabel) {
+      if (!data || data.status !== 1 || !data.product) return null;
       const searchName = buildSearchName(data.product);
       const qty = data.product.quantity ? " · " + data.product.quantity : "";
       const display = searchName || "Unknown product name";
@@ -845,7 +896,78 @@
         found: Boolean(searchName),
         searchName: searchName || code,
         display,
-        meta: "UPC " + code + qty,
+        meta: "UPC " + code + qty + " · " + sourceLabel,
+        source: sourceLabel,
+      };
+    }
+
+    function parseUpcDevResponse(data, code, sourceLabel) {
+      if (!data || typeof data !== "object") return null;
+
+      const pickName = (obj) => {
+        if (!obj || typeof obj !== "object") return "";
+        return String(
+          obj.name ||
+            obj.title ||
+            obj.product_name ||
+            obj.productName ||
+            ""
+        ).trim();
+      };
+
+      let name = pickName(data);
+      let brand = String(data.brand || data.brands || "")
+        .split(",")[0]
+        .trim();
+
+      if (!name && data.product) {
+        name = pickName(data.product);
+        if (!brand) {
+          brand = String(data.product.brand || data.product.brands || "")
+            .split(",")[0]
+            .trim();
+        }
+      }
+
+      let searchName = name;
+      if (name && brand && !name.toLowerCase().includes(brand.toLowerCase())) {
+        searchName = brand + " " + name;
+      }
+      if (!searchName) return null;
+
+      return {
+        found: true,
+        searchName,
+        display: searchName,
+        meta: "UPC " + code + " · " + sourceLabel,
+        source: sourceLabel,
+      };
+    }
+
+    async function lookupFromSource(source, code) {
+      const data = await fetchJsonWithTimeout(
+        source.buildUrl(code),
+        source.timeoutMs
+      );
+      if (!data) return null;
+      return source.parse(data, code, source.label);
+    }
+
+    async function lookupBarcode(code, onProgress) {
+      for (let i = 0; i < LOOKUP_SOURCES.length; i++) {
+        const source = LOOKUP_SOURCES[i];
+        if (onProgress) {
+          onProgress(source.label, i + 1, LOOKUP_SOURCES.length);
+        }
+        const result = await lookupFromSource(source, code);
+        if (result && result.found) return result;
+      }
+
+      return {
+        found: false,
+        searchName: code,
+        display: "Product not found in any database.",
+        meta: "UPC " + code,
       };
     }
 
@@ -882,19 +1004,27 @@
       resultCard.classList.remove("hidden");
 
       try {
-        const result = await lookupBarcode(code);
+        const result = await lookupBarcode(code, function (label, step, total) {
+          setLiveProduct("Looking up (" + step + "/" + total + "): " + label + "…", "looking");
+          showStatus(
+            scanStatus,
+            "Barcode " + code + " — trying " + label + " (" + step + "/" + total + ")…",
+            "info"
+          );
+        });
         searchText.value = result.searchName || code;
         productMeta.textContent = result.meta || "UPC " + code;
         manualBarcode.value = code;
 
         if (result.found) {
           setLiveProduct(result.display, "found");
-          showStatus(scanStatus, "Found: " + result.display, "ok");
+          const via = result.source ? " (" + result.source + ")" : "";
+          showStatus(scanStatus, "Found" + via + ": " + result.display, "ok");
         } else {
           setLiveProduct("No name found — UPC " + code, "warn");
           showStatus(
             scanStatus,
-            "No name in database — edit the text below, then search Flipp.",
+            "Not in any database — edit the text below, then search Flipp.",
             "warn"
           );
         }

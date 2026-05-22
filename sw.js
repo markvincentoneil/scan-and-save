@@ -1,4 +1,4 @@
-const CACHE = "scan-and-save-v1";
+const CACHE = "scan-and-save-v2";
 
 const PRECACHE = [
   "./",
