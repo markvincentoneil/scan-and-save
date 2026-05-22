@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#0f1419" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="apple-itunes-app" content="app-id=558297215" />
-  <title>Scan and Save</title>
+  <title>Scan and Save v2</title>
   <style>
     :root {
       --bg: #0f1419;
@@ -255,11 +255,134 @@
     }
 
     a { color: var(--accent); }
+
+    .btn-collapse {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 700;
+      width: 100%;
+      text-align: left;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .settings-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .settings-grid label.row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 0.9rem;
+      color: var(--text);
+      margin: 0;
+    }
+
+    .settings-grid select {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+    }
+
+    .product-img {
+      width: 100%;
+      max-height: 160px;
+      object-fit: contain;
+      border-radius: 10px;
+      background: var(--bg);
+      margin-bottom: 10px;
+    }
+
+    .btn-primary-action {
+      background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+      color: #fff;
+      font-size: 1.05rem;
+    }
+
+    .history-list {
+      list-style: none;
+      margin: 10px 0 0;
+      padding: 0;
+    }
+
+    .history-list li {
+      border-top: 1px solid var(--border);
+      padding: 10px 0;
+    }
+
+    .history-list button {
+      background: none;
+      border: none;
+      color: var(--text);
+      text-align: left;
+      width: 100%;
+      padding: 0;
+      font-size: 0.92rem;
+      cursor: pointer;
+    }
+
+    .history-list .hist-meta {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .update-banner {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #1e3a5f;
+      color: #bfdbfe;
+      font-size: 0.88rem;
+    }
+
+    .update-banner button {
+      margin-top: 8px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
-  <h1>Scan and Save</h1>
+  <h1>Scan and Save <span style="font-size:0.75rem;color:var(--muted);font-weight:500;">v2</span></h1>
   <p class="subtitle">Scan a barcode, get the product name, then search flyers and deals.</p>
+
+  <div id="updateBanner" class="update-banner hidden" role="status">
+    A newer version of this app is ready.
+    <button type="button" id="btnReloadApp">Refresh app</button>
+  </div>
+
+  <div class="card">
+    <button type="button" class="btn-collapse" id="btnToggleSettings" aria-expanded="false">Settings ▾</button>
+    <div id="settingsBody" class="settings-grid hidden">
+      <label class="row"><input type="checkbox" id="setAutoScan" checked /> Auto-scan when barcode is in focus</label>
+      <label class="row"><input type="checkbox" id="setSourceOpenFacts" checked /> Lookup: Open Facts (all types)</label>
+      <label class="row"><input type="checkbox" id="setSourceOpenProducts" checked /> Lookup: Open Products Facts</label>
+      <label class="row"><input type="checkbox" id="setSourceUpcDev" /> Lookup: upc.dev (often slow)</label>
+      <label for="setPreferredFlyer">Primary flyer button</label>
+      <select id="setPreferredFlyer">
+        <option value="flipp">Copy &amp; open Flipp</option>
+        <option value="reebee">Copy &amp; open Reebee</option>
+        <option value="google">Google (flyers)</option>
+      </select>
+    </div>
+  </div>
 
   <div class="card">
     <p class="scan-hint hidden" id="scanHint">
@@ -290,6 +413,7 @@
     <label for="manualBarcode" style="margin-top: 14px;">Or type barcode manually</label>
     <input type="text" id="manualBarcode" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 0662900001234" />
     <button type="button" class="btn btn-secondary" id="btnManual">Look up this barcode</button>
+    <button type="button" class="btn btn-secondary" id="btnReadLabel">Read product name from label (OCR)</button>
     <div id="scanStatus" class="status info hidden"></div>
     <p class="scan-hint" id="cameraHelp" style="margin-top: 12px;">
       <strong>Camera blocked?</strong> iPhone: Settings → Safari → Camera → <strong>Allow</strong>,
@@ -298,17 +422,26 @@
   </div>
 
   <div class="card hidden" id="resultCard">
-    <label for="searchText">Search text (edit if you like)</label>
+    <img id="productImage" class="product-img hidden" alt="Product" />
+    <label for="searchText">Search text (edit if you like — saved on this device)</label>
     <textarea id="searchText" rows="2"></textarea>
     <p class="meta" id="productMeta"></p>
 
+    <button type="button" class="btn btn-primary-action hidden" id="btnPrimaryFlyer">Copy &amp; open Flipp</button>
+    <button type="button" class="btn btn-secondary" id="btnShorten">Shorten for flyers</button>
     <button type="button" class="btn btn-secondary" id="btnCopy">Copy search text</button>
-    <button type="button" class="btn btn-reebee" id="btnReebee">Copy &amp; open Reebee app</button>
-    <button type="button" class="btn btn-flipp" id="btnFlipp">Search on Flipp.com</button>
-    <button type="button" class="btn btn-google" id="btnGoogleFlyer">Search on Google (flyers)</button>
+    <button type="button" class="btn btn-reebee" id="btnReebee" data-flyer="reebee">Copy &amp; open Reebee app</button>
+    <button type="button" class="btn btn-flipp" id="btnFlipp" data-flyer="flipp">Search on Flipp.com</button>
+    <button type="button" class="btn btn-google" id="btnGoogleFlyer" data-flyer="google">Search on Google (flyers)</button>
     <a class="btn btn-secondary" id="btnReebeeStore" href="https://apps.apple.com/app/id558297215" target="_blank" rel="noopener noreferrer" style="text-align: center; text-decoration: none; display: block;">Get Reebee on the App Store</a>
     <button type="button" class="btn btn-secondary" id="btnScanAgain">Scan another item</button>
     <div id="actionStatus" class="status hidden"></div>
+  </div>
+
+  <div class="card hidden" id="historyCard">
+    <strong style="font-size: 0.95rem;">Recent scans</strong>
+    <ul class="history-list" id="historyList"></ul>
+    <button type="button" class="btn btn-secondary" id="btnClearHistory" style="margin-top:8px;">Clear history</button>
   </div>
 
   <div class="card">
@@ -320,7 +453,7 @@
   </div>
 
   <footer>
-    Product names from
+    <span id="appVersion">v2.0.0</span> · Product names from
     <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>,
     <a href="https://world.openproductsfacts.org" target="_blank" rel="noopener">Open Products Facts</a>, and
     <a href="https://upc.dev" target="_blank" rel="noopener">upc.dev</a>
@@ -328,8 +461,17 @@
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script>
+    const APP_VERSION = "2.0.0";
     const FLIPP_SEARCH_BASE = "https://flipp.com/search";
+    const STORAGE_KEYS = {
+      settings: "scan-and-save-v2-settings",
+      cache: "scan-and-save-v2-cache",
+      fixes: "scan-and-save-v2-fixes",
+      history: "scan-and-save-v2-history",
+    };
+    const HISTORY_MAX = 20;
     const REEBEE_APP_STORE_URL = "https://apps.apple.com/app/id558297215";
     const REEBEE_APP_SCHEME = "com.reebee.reebee://";
 
@@ -370,6 +512,26 @@
     const liveProductLabel = document.getElementById("liveProductLabel");
     const liveProductName = document.getElementById("liveProductName");
     const captureFlash = document.getElementById("captureFlash");
+    const btnToggleSettings = document.getElementById("btnToggleSettings");
+    const settingsBody = document.getElementById("settingsBody");
+    const setAutoScan = document.getElementById("setAutoScan");
+    const setSourceOpenFacts = document.getElementById("setSourceOpenFacts");
+    const setSourceOpenProducts = document.getElementById("setSourceOpenProducts");
+    const setSourceUpcDev = document.getElementById("setSourceUpcDev");
+    const setPreferredFlyer = document.getElementById("setPreferredFlyer");
+    const productImage = document.getElementById("productImage");
+    const btnPrimaryFlyer = document.getElementById("btnPrimaryFlyer");
+    const btnShorten = document.getElementById("btnShorten");
+    const btnReadLabel = document.getElementById("btnReadLabel");
+    const historyCard = document.getElementById("historyCard");
+    const historyList = document.getElementById("historyList");
+    const btnClearHistory = document.getElementById("btnClearHistory");
+    const updateBanner = document.getElementById("updateBanner");
+    const btnReloadApp = document.getElementById("btnReloadApp");
+    const appVersionEl = document.getElementById("appVersion");
+
+    let appSettings = loadSettings();
+    let lastLookupResult = null;
 
     let scanner = null;
     let isScanning = false;
@@ -385,6 +547,284 @@
     const AUTO_SCAN_INTERVAL_MS = 250;
     const AUTO_SCAN_MATCHES = 2;
     const AUTO_SCAN_SHARPNESS_MIN = 35;
+
+    const FLYER_FILLER =
+      /\b(organic|natural|premium|artisan|fair\s*trade|gluten\s*free|non[\s-]*gmo|new\s+look|family\s+size|value\s+size)\b/gi;
+
+    const OFF_PRODUCT_FIELDS =
+      "product_name,product_name_en,generic_name,brands,quantity,image_url,image_front_url,image_front_small_url";
+    const LOOKUP_FETCH_MS = 8000;
+    const UPC_DEV_FETCH_MS = 5000;
+
+    const LOOKUP_SOURCE_DEFS = [
+      {
+        id: "openfacts-all",
+        label: "Open Facts",
+        settingKey: "openFacts",
+        buildUrl(code) {
+          return (
+            "https://world.openfoodfacts.org/api/v2/product/" +
+            encodeURIComponent(code) +
+            "?product_type=all&fields=" +
+            OFF_PRODUCT_FIELDS
+          );
+        },
+        parse: parseOpenFactsResponse,
+      },
+      {
+        id: "openproducts",
+        label: "Open Products Facts",
+        settingKey: "openProducts",
+        buildUrl(code) {
+          return (
+            "https://world.openproductsfacts.org/api/v2/product/" +
+            encodeURIComponent(code) +
+            "?fields=" +
+            OFF_PRODUCT_FIELDS
+          );
+        },
+        parse: parseOpenFactsResponse,
+      },
+      {
+        id: "upcdev",
+        label: "upc.dev",
+        settingKey: "upcDev",
+        timeoutMs: UPC_DEV_FETCH_MS,
+        buildUrl(code) {
+          return "https://upc.dev/v1/product/" + encodeURIComponent(code);
+        },
+        parse: parseUpcDevResponse,
+      },
+    ];
+
+    function defaultSettings() {
+      return {
+        autoScan: true,
+        openFacts: true,
+        openProducts: true,
+        upcDev: false,
+        preferredFlyer: "flipp",
+      };
+    }
+
+    function loadSettings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.settings);
+        if (!raw) return defaultSettings();
+        return Object.assign(defaultSettings(), JSON.parse(raw));
+      } catch (e) {
+        return defaultSettings();
+      }
+    }
+
+    function saveSettings() {
+      try {
+        localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(appSettings));
+      } catch (e) {
+        console.warn("saveSettings", e);
+      }
+    }
+
+    function loadJsonStorage(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function saveJsonStorage(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (e) {
+        console.warn("saveJsonStorage", key, e);
+      }
+    }
+
+    function getUserFix(code) {
+      const fixes = loadJsonStorage(STORAGE_KEYS.fixes, {});
+      const entry = fixes[code];
+      return entry && entry.searchName ? String(entry.searchName).trim() : "";
+    }
+
+    function saveUserFix(code, searchName) {
+      if (!code || !searchName) return;
+      const fixes = loadJsonStorage(STORAGE_KEYS.fixes, {});
+      fixes[code] = { searchName: searchName.trim(), at: Date.now() };
+      saveJsonStorage(STORAGE_KEYS.fixes, fixes);
+    }
+
+    function getCachedProduct(code) {
+      const cache = loadJsonStorage(STORAGE_KEYS.cache, {});
+      const entry = cache[code];
+      if (!entry || !entry.searchName) return null;
+      return entry;
+    }
+
+    function saveProductCache(code, result) {
+      if (!code || !result || !result.searchName) return;
+      const cache = loadJsonStorage(STORAGE_KEYS.cache, {});
+      cache[code] = {
+        found: true,
+        searchName: result.searchName,
+        display: result.display || result.searchName,
+        meta: result.meta || "UPC " + code,
+        source: result.source || "Cached",
+        imageUrl: result.imageUrl || "",
+        at: Date.now(),
+      };
+      saveJsonStorage(STORAGE_KEYS.cache, cache);
+    }
+
+    function loadHistory() {
+      const list = loadJsonStorage(STORAGE_KEYS.history, []);
+      return Array.isArray(list) ? list : [];
+    }
+
+    function pushHistory(entry) {
+      let list = loadHistory().filter(function (h) {
+        return h.code !== entry.code;
+      });
+      list.unshift(entry);
+      if (list.length > HISTORY_MAX) list = list.slice(0, HISTORY_MAX);
+      saveJsonStorage(STORAGE_KEYS.history, list);
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const list = loadHistory();
+      if (!list.length) {
+        historyCard.classList.add("hidden");
+        historyList.innerHTML = "";
+        return;
+      }
+      historyCard.classList.remove("hidden");
+      historyList.innerHTML = list
+        .map(function (h, idx) {
+          const when = new Date(h.at).toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          return (
+            '<li><button type="button" data-hist-idx="' +
+            idx +
+            '">' +
+            escapeHtml(h.name) +
+            '</button><div class="hist-meta">UPC ' +
+            escapeHtml(h.code) +
+            " · " +
+            escapeHtml(when) +
+            (h.source ? " · " + escapeHtml(h.source) : "") +
+            "</div></li>"
+          );
+        })
+        .join("");
+
+      historyList.querySelectorAll("button[data-hist-idx]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          const idx = parseInt(btn.getAttribute("data-hist-idx"), 10);
+          const h = loadHistory()[idx];
+          if (!h) return;
+          lastBarcode = h.code;
+          manualBarcode.value = h.code;
+          searchText.value = h.name;
+          resultCard.classList.remove("hidden");
+          productMeta.textContent = "UPC " + h.code + " · from history";
+          const cached = getCachedProduct(h.code);
+          showProductImage(cached && cached.imageUrl ? cached.imageUrl : "");
+          btnPrimaryFlyer.classList.remove("hidden");
+          showStatus(actionStatus, "Loaded from history.", "ok");
+        });
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function applySettingsToUI() {
+      if (autoScanEnabled) autoScanEnabled.checked = appSettings.autoScan;
+      setAutoScan.checked = appSettings.autoScan;
+      setSourceOpenFacts.checked = appSettings.openFacts;
+      setSourceOpenProducts.checked = appSettings.openProducts;
+      setSourceUpcDev.checked = appSettings.upcDev;
+      setPreferredFlyer.value = appSettings.preferredFlyer || "flipp";
+      applyPrimaryFlyerButton();
+    }
+
+    function readSettingsFromUI() {
+      appSettings.autoScan = setAutoScan.checked;
+      appSettings.openFacts = setSourceOpenFacts.checked;
+      appSettings.openProducts = setSourceOpenProducts.checked;
+      appSettings.upcDev = setSourceUpcDev.checked;
+      appSettings.preferredFlyer = setPreferredFlyer.value;
+      if (autoScanEnabled) autoScanEnabled.checked = appSettings.autoScan;
+      saveSettings();
+      applyPrimaryFlyerButton();
+    }
+
+    function applyPrimaryFlyerButton() {
+      const pref = appSettings.preferredFlyer || "flipp";
+      const labels = {
+        flipp: "Copy & open Flipp",
+        reebee: "Copy & open Reebee",
+        google: "Search on Google (flyers)",
+      };
+      btnPrimaryFlyer.textContent = labels[pref] || labels.flipp;
+      btnPrimaryFlyer.dataset.flyer = pref;
+    }
+
+    function showProductImage(url) {
+      if (!url) {
+        productImage.classList.add("hidden");
+        productImage.removeAttribute("src");
+        return;
+      }
+      productImage.src = url;
+      productImage.classList.remove("hidden");
+    }
+
+    function shortenForFlyers(text) {
+      let t = String(text).trim();
+      t = t.replace(FLYER_FILLER, " ").replace(/\s+/g, " ").trim();
+      const sizeMatch = t.match(
+        /\b(\d+(\.\d+)?\s*(ml|l|g|kg|oz|lb|pack|pk|ct|count))\b/i
+      );
+      if (t.length > 55) {
+        const words = t.split(/\s+/);
+        t = words.slice(0, Math.min(8, words.length)).join(" ");
+      }
+      if (sizeMatch && !t.toLowerCase().includes(sizeMatch[0].toLowerCase())) {
+        t = (t + " " + sizeMatch[0]).trim();
+      }
+      return t;
+    }
+
+    function barcodeVariants(raw) {
+      const digits = String(raw).replace(/\D/g, "");
+      const out = [];
+      const seen = new Set();
+
+      function add(v) {
+        if (!v || v.length < 8 || v.length > 14) return;
+        if (seen.has(v)) return;
+        seen.add(v);
+        out.push(v);
+      }
+
+      add(digits);
+      if (digits.length === 13 && digits.charAt(0) === "0") add(digits.slice(1));
+      if (digits.length === 12) add("0" + digits);
+      if (digits.length === 8) add("00000" + digits);
+      if (digits.length > 12) add(digits.slice(-12));
+      return out.length ? out : [digits];
+    }
 
     function resetScanSession() {
       lastBarcode = null;
@@ -828,49 +1268,6 @@
       return name || generic || brand || "";
     }
 
-    const OFF_PRODUCT_FIELDS =
-      "product_name,product_name_en,generic_name,brands,quantity";
-    const LOOKUP_FETCH_MS = 8000;
-    const UPC_DEV_FETCH_MS = 5000;
-
-    const LOOKUP_SOURCES = [
-      {
-        id: "openfacts-all",
-        label: "Open Facts",
-        buildUrl(code) {
-          return (
-            "https://world.openfoodfacts.org/api/v2/product/" +
-            encodeURIComponent(code) +
-            "?product_type=all&fields=" +
-            OFF_PRODUCT_FIELDS
-          );
-        },
-        parse: parseOpenFactsResponse,
-      },
-      {
-        id: "openproducts",
-        label: "Open Products Facts",
-        buildUrl(code) {
-          return (
-            "https://world.openproductsfacts.org/api/v2/product/" +
-            encodeURIComponent(code) +
-            "?fields=" +
-            OFF_PRODUCT_FIELDS
-          );
-        },
-        parse: parseOpenFactsResponse,
-      },
-      {
-        id: "upcdev",
-        label: "upc.dev",
-        timeoutMs: UPC_DEV_FETCH_MS,
-        buildUrl(code) {
-          return "https://upc.dev/v1/product/" + encodeURIComponent(code);
-        },
-        parse: parseUpcDevResponse,
-      },
-    ];
-
     async function fetchJsonWithTimeout(url, timeoutMs) {
       const ms = timeoutMs || LOOKUP_FETCH_MS;
       const ctrl = new AbortController();
@@ -887,6 +1284,16 @@
       }
     }
 
+    function pickProductImageUrl(product) {
+      if (!product) return "";
+      return (
+        product.image_front_small_url ||
+        product.image_front_url ||
+        product.image_url ||
+        ""
+      );
+    }
+
     function parseOpenFactsResponse(data, code, sourceLabel) {
       if (!data || data.status !== 1 || !data.product) return null;
       const searchName = buildSearchName(data.product);
@@ -898,6 +1305,7 @@
         display,
         meta: "UPC " + code + qty + " · " + sourceLabel,
         source: sourceLabel,
+        imageUrl: pickProductImageUrl(data.product),
       };
     }
 
@@ -944,6 +1352,12 @@
       };
     }
 
+    function getActiveLookupSources() {
+      return LOOKUP_SOURCE_DEFS.filter(function (def) {
+        return appSettings[def.settingKey] !== false;
+      });
+    }
+
     async function lookupFromSource(source, code) {
       const data = await fetchJsonWithTimeout(
         source.buildUrl(code),
@@ -953,22 +1367,130 @@
       return source.parse(data, code, source.label);
     }
 
-    async function lookupBarcode(code, onProgress) {
-      for (let i = 0; i < LOOKUP_SOURCES.length; i++) {
-        const source = LOOKUP_SOURCES[i];
-        if (onProgress) {
-          onProgress(source.label, i + 1, LOOKUP_SOURCES.length);
+    async function lookupBarcodeParallel(code, onProgress) {
+      const sources = getActiveLookupSources();
+      if (!sources.length) {
+        return {
+          found: false,
+          searchName: code,
+          display: "No lookup sources enabled in Settings.",
+          meta: "UPC " + code,
+        };
+      }
+
+      if (onProgress) {
+        onProgress("parallel search", 1, sources.length);
+      }
+
+      return new Promise(function (resolve) {
+        let pending = sources.length;
+        let settled = false;
+
+        sources.forEach(function (source) {
+          lookupFromSource(source, code).then(function (result) {
+            if (settled) return;
+            if (result && result.found) {
+              settled = true;
+              resolve(result);
+              return;
+            }
+            pending -= 1;
+            if (pending === 0 && !settled) {
+              settled = true;
+              resolve({
+                found: false,
+                searchName: code,
+                display: "Product not found in any database.",
+                meta: "UPC " + code,
+              });
+            }
+          });
+        });
+      });
+    }
+
+    async function resolveProduct(primaryCode, onProgress) {
+      const fix = getUserFix(primaryCode);
+      if (fix) {
+        return {
+          found: true,
+          searchName: fix,
+          display: fix,
+          meta: "UPC " + primaryCode + " · Your saved name",
+          source: "Your edit",
+          imageUrl: "",
+          fromLocal: true,
+        };
+      }
+
+      const cached = getCachedProduct(primaryCode);
+      if (cached) {
+        return {
+          found: true,
+          searchName: cached.searchName,
+          display: cached.display || cached.searchName,
+          meta: (cached.meta || "UPC " + primaryCode) + " · Saved on device",
+          source: cached.source || "Saved cache",
+          imageUrl: cached.imageUrl || "",
+          fromLocal: true,
+        };
+      }
+
+      const variants = barcodeVariants(primaryCode);
+      for (let v = 0; v < variants.length; v++) {
+        const variant = variants[v];
+        if (onProgress && variants.length > 1) {
+          onProgress(
+            "online (" + (v + 1) + "/" + variants.length + " formats)",
+            v + 1,
+            variants.length
+          );
         }
-        const result = await lookupFromSource(source, code);
-        if (result && result.found) return result;
+        const result = await lookupBarcodeParallel(variant, onProgress);
+        if (result && result.found) {
+          saveProductCache(primaryCode, result);
+          saveProductCache(variant, result);
+          return result;
+        }
       }
 
       return {
         found: false,
-        searchName: code,
+        searchName: primaryCode,
         display: "Product not found in any database.",
-        meta: "UPC " + code,
+        meta: "UPC " + primaryCode,
+        imageUrl: "",
       };
+    }
+
+    function applyLookupResult(code, result) {
+      lastLookupResult = result;
+      searchText.value = result.searchName || code;
+      productMeta.textContent = result.meta || "UPC " + code;
+      manualBarcode.value = code;
+      showProductImage(result.imageUrl || "");
+
+      if (result.found) {
+        setLiveProduct(result.display, "found");
+        const via = result.source ? " (" + result.source + ")" : "";
+        showStatus(scanStatus, "Found" + via + ": " + result.display, "ok");
+        btnPrimaryFlyer.classList.remove("hidden");
+      } else {
+        setLiveProduct("No name found — UPC " + code, "warn");
+        showStatus(
+          scanStatus,
+          "Not in any database — edit the text, use Read label (OCR), or search by number.",
+          "warn"
+        );
+        btnPrimaryFlyer.classList.remove("hidden");
+      }
+
+      pushHistory({
+        code: code,
+        name: searchText.value.trim() || code,
+        source: result.source || "",
+        at: Date.now(),
+      });
     }
 
     function normalizeBarcode(raw) {
@@ -1004,33 +1526,19 @@
       resultCard.classList.remove("hidden");
 
       try {
-        const result = await lookupBarcode(code, function (label, step, total) {
+        const result = await resolveProduct(code, function (label, step, total) {
           setLiveProduct("Looking up (" + step + "/" + total + "): " + label + "…", "looking");
           showStatus(
             scanStatus,
-            "Barcode " + code + " — trying " + label + " (" + step + "/" + total + ")…",
+            "Barcode " + code + " — " + label + " (" + step + "/" + total + ")…",
             "info"
           );
         });
-        searchText.value = result.searchName || code;
-        productMeta.textContent = result.meta || "UPC " + code;
-        manualBarcode.value = code;
-
-        if (result.found) {
-          setLiveProduct(result.display, "found");
-          const via = result.source ? " (" + result.source + ")" : "";
-          showStatus(scanStatus, "Found" + via + ": " + result.display, "ok");
-        } else {
-          setLiveProduct("No name found — UPC " + code, "warn");
-          showStatus(
-            scanStatus,
-            "Not in any database — edit the text below, then search Flipp.",
-            "warn"
-          );
-        }
+        applyLookupResult(code, result);
       } catch (err) {
         searchText.value = code;
         productMeta.textContent = "UPC " + code;
+        showProductImage("");
         setLiveProduct("Lookup failed — UPC " + code, "warn");
         showStatus(
           scanStatus,
@@ -1294,6 +1802,86 @@
       await openWebFlyerSearch(googleFlyerSearchUrl, "Google");
     }
 
+    async function readLabelFromCamera() {
+      const video = getScannerVideo();
+      if (!video || video.readyState < 2) {
+        showStatus(
+          scanStatus,
+          "Start the camera, point at the product name on the package, then tap Read label.",
+          "warn"
+        );
+        return;
+      }
+
+      if (typeof Tesseract === "undefined") {
+        showStatus(scanStatus, "OCR library not loaded. Check your connection and reload.", "err");
+        return;
+      }
+
+      showStatus(scanStatus, "Reading label… hold steady.", "info");
+      setLiveProduct("Reading label (OCR)…", "looking");
+
+      try {
+        const canvas = frameToCanvas(video, false);
+        const result = await Tesseract.recognize(canvas, "eng", {
+          logger: function () {},
+        });
+        const text = (result.data && result.data.text) || "";
+        const lines = text
+          .split("\n")
+          .map(function (l) {
+            return l.replace(/\s+/g, " ").trim();
+          })
+          .filter(function (l) {
+            return l.length > 3 && !/^\d+$/.test(l);
+          })
+          .sort(function (a, b) {
+            return b.length - a.length;
+          });
+
+        const best = lines[0] || "";
+        if (!best) {
+          showStatus(
+            scanStatus,
+            "Could not read text. Use better light, move closer, and try again.",
+            "warn"
+          );
+          setLiveProduct("OCR found no text", "warn");
+          return;
+        }
+
+        resultCard.classList.remove("hidden");
+        searchText.value = best;
+        setLiveProduct(best, "found");
+        showStatus(scanStatus, "Label read — check the text and edit if needed.", "ok");
+        btnPrimaryFlyer.classList.remove("hidden");
+
+        if (lastBarcode) {
+          saveUserFix(lastBarcode, best);
+          productMeta.textContent = "UPC " + lastBarcode + " · from label (OCR)";
+          pushHistory({
+            code: lastBarcode,
+            name: best,
+            source: "OCR",
+            at: Date.now(),
+          });
+        } else {
+          productMeta.textContent = "From label (OCR) — scan barcode to link next time";
+        }
+      } catch (err) {
+        console.error(err);
+        showStatus(scanStatus, "OCR failed. Try again or type the name manually.", "err");
+        setLiveProduct("OCR failed", "warn");
+      }
+    }
+
+    async function handlePrimaryFlyer() {
+      const pref = btnPrimaryFlyer.dataset.flyer || appSettings.preferredFlyer || "flipp";
+      if (pref === "reebee") await handleReebee();
+      else if (pref === "google") await handleGoogleFlyer();
+      else await handleFlipp();
+    }
+
     async function handleReebee() {
       const text = searchText.value.trim();
       if (!text) {
@@ -1328,11 +1916,57 @@
       }, 900);
     }
 
+    btnToggleSettings.addEventListener("click", function () {
+      settingsBody.classList.toggle("hidden");
+      const collapsed = settingsBody.classList.contains("hidden");
+      btnToggleSettings.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      btnToggleSettings.textContent = collapsed ? "Settings ▾" : "Settings ▴";
+    });
+
+    [setAutoScan, setSourceOpenFacts, setSourceOpenProducts, setSourceUpcDev, setPreferredFlyer].forEach(
+      function (el) {
+        el.addEventListener("change", readSettingsFromUI);
+      }
+    );
+
+    btnShorten.addEventListener("click", function () {
+      const t = searchText.value.trim();
+      if (!t) {
+        showStatus(actionStatus, "Nothing to shorten.", "warn");
+        return;
+      }
+      searchText.value = shortenForFlyers(t);
+      showStatus(actionStatus, "Shortened for flyer search.", "ok");
+      if (lastBarcode) saveUserFix(lastBarcode, searchText.value.trim());
+    });
+
+    btnPrimaryFlyer.addEventListener("click", handlePrimaryFlyer);
+    btnReadLabel.addEventListener("click", readLabelFromCamera);
+
+    searchText.addEventListener("blur", function () {
+      if (!lastBarcode) return;
+      const t = searchText.value.trim();
+      if (t) saveUserFix(lastBarcode, t);
+    });
+
+    btnClearHistory.addEventListener("click", function () {
+      saveJsonStorage(STORAGE_KEYS.history, []);
+      renderHistory();
+      showStatus(actionStatus, "History cleared.", "ok");
+    });
+
+    btnReloadApp.addEventListener("click", function () {
+      window.location.reload();
+    });
+
     btnScan.addEventListener("click", startCamera);
     btnCapture.addEventListener("click", captureAndScan);
     btnTorch.addEventListener("click", toggleTorch);
     btnStop.addEventListener("click", stopCamera);
     autoScanEnabled.addEventListener("change", function () {
+      appSettings.autoScan = autoScanEnabled.checked;
+      setAutoScan.checked = appSettings.autoScan;
+      saveSettings();
       if (isScanning) {
         if (autoScanEnabled.checked) {
           startAutoScan();
@@ -1373,9 +2007,30 @@
       if (document.hidden && isScanning) stopCamera();
     });
 
+    if (appVersionEl) appVersionEl.textContent = "v" + APP_VERSION;
+    applySettingsToUI();
+    renderHistory();
+
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      window.addEventListener("load", function () {
+        navigator.serviceWorker
+          .register("./sw.js")
+          .then(function (reg) {
+            reg.update();
+            reg.addEventListener("updatefound", function () {
+              const worker = reg.installing;
+              if (!worker) return;
+              worker.addEventListener("statechange", function () {
+                if (
+                  worker.state === "installed" &&
+                  navigator.serviceWorker.controller
+                ) {
+                  updateBanner.classList.remove("hidden");
+                }
+              });
+            });
+          })
+          .catch(function () {});
       });
     }
   </script>
