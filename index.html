@@ -437,7 +437,6 @@
       cache: "scan-and-save-v2-cache",
     };
     const REEBEE_APP_STORE_URL = "https://apps.apple.com/app/id558297215";
-    const REEBEE_APP_SCHEME = "com.reebee.reebee://";
 
     function googleFlyerSearchUrl(searchText) {
       const q = encodeURIComponent(searchText.trim());
@@ -445,18 +444,30 @@
     }
 
     const REEBEE_RETURN_URL_KEY = "scan-and-save-v2-return-url";
+    const REEBEE_LAUNCH_SCHEMES = ["com.reebee.reebee://", "reebee://"];
 
     function isReebeeSchemePage() {
       const href = window.location.href;
-      return href.indexOf("com.reebee") !== -1;
+      return href.indexOf("com.reebee") !== -1 || href.indexOf("reebee://") === 0;
+    }
+
+    function isOnScanAndSavePage() {
+      const href = window.location.href;
+      return href.indexOf("index.html") !== -1 || /\/v2\/?$/.test(href.split("?")[0]);
     }
 
     function restoreAppPageAfterReebee() {
       try {
         const returnUrl = sessionStorage.getItem(REEBEE_RETURN_URL_KEY);
-        if (!returnUrl || !isReebeeSchemePage()) return;
-        sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
-        location.replace(returnUrl);
+        if (!returnUrl) return;
+        if (isReebeeSchemePage()) {
+          sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
+          location.replace(returnUrl);
+          return;
+        }
+        if (isOnScanAndSavePage()) {
+          sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
+        }
       } catch (e) {
         console.debug("restoreAppPageAfterReebee", e);
       }
@@ -465,10 +476,12 @@
     function openReebeeApp() {
       return new Promise(function (resolve) {
         let settled = false;
-        function finish(appOpened) {
+        let sawHidden = false;
+
+        function finish(appLikelyOpened) {
           if (settled) return;
           settled = true;
-          resolve(appOpened);
+          resolve(appLikelyOpened);
         }
 
         try {
@@ -477,26 +490,19 @@
 
         const onVisibility = function () {
           if (document.hidden) {
-            document.removeEventListener("visibilitychange", onVisibility);
-            finish(true);
+            sawHidden = true;
+          } else {
+            restoreAppPageAfterReebee();
           }
         };
         document.addEventListener("visibilitychange", onVisibility);
 
-        const iframe = document.createElement("iframe");
-        iframe.setAttribute("aria-hidden", "true");
-        iframe.style.cssText =
-          "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;border:0;";
-        iframe.src = REEBEE_APP_SCHEME;
-        document.body.appendChild(iframe);
+        window.location.href = REEBEE_LAUNCH_SCHEMES[0];
 
         setTimeout(function () {
           document.removeEventListener("visibilitychange", onVisibility);
-          try {
-            if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-          } catch (e) {}
-          finish(false);
-        }, 1200);
+          finish(sawHidden);
+        }, 3500);
       });
     }
 
@@ -1807,24 +1813,12 @@
         return;
       }
 
-      try {
-        sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
-      } catch (e) {}
-
-      const tab = window.open(reebeeWebSearchUrl(text), "_blank", "noopener,noreferrer");
-      if (tab) {
-        showStatus(
-          actionStatus,
-          "Reebee app did not open — opened reebee.com in a new tab. Paste your search there.",
-          "warn"
-        );
-      } else {
-        showStatus(
-          actionStatus,
-          "Copy is ready — open Reebee from your home screen and paste in search.",
-          "warn"
-        );
-      }
+      restoreAppPageAfterReebee();
+      showStatus(
+        actionStatus,
+        "Copied. Open Reebee from your home screen, then paste in search. (Safari may ask to open the app — tap Open.)",
+        "ok"
+      );
     }
 
     btnToggleSettings.addEventListener("click", function () {
@@ -1904,6 +1898,10 @@
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden) restoreAppPageAfterReebee();
       if (document.hidden && isScanning) stopCamera();
+    });
+
+    window.addEventListener("pageshow", function () {
+      restoreAppPageAfterReebee();
     });
 
     restoreAppPageAfterReebee();
