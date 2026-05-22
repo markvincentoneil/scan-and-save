@@ -561,8 +561,9 @@
     const AUTO_SCAN_MATCHES = 2;
     const AUTO_SCAN_SHARPNESS_MIN = 35;
 
+    const OFF_API_LC = "en";
     const OFF_PRODUCT_FIELDS =
-      "product_name,product_name_en,generic_name,brands,quantity,image_url,image_front_url,image_front_small_url";
+      "product_name,product_name_en,product_name_fr,generic_name,generic_name_en,generic_name_fr,brands,quantity,image_url,image_front_url,image_front_small_url";
     const LOOKUP_FETCH_MS = 8000;
     const UPC_DEV_FETCH_MS = 5000;
 
@@ -575,7 +576,9 @@
           return (
             "https://world.openfoodfacts.org/api/v2/product/" +
             encodeURIComponent(code) +
-            "?product_type=all&fields=" +
+            "?product_type=all&lc=" +
+            OFF_API_LC +
+            "&fields=" +
             OFF_PRODUCT_FIELDS
           );
         },
@@ -589,7 +592,9 @@
           return (
             "https://world.openproductsfacts.org/api/v2/product/" +
             encodeURIComponent(code) +
-            "?fields=" +
+            "?lc=" +
+            OFF_API_LC +
+            "&fields=" +
             OFF_PRODUCT_FIELDS
           );
         },
@@ -1188,14 +1193,28 @@
       el.classList.add("hidden");
     }
 
+    function firstNonEmpty() {
+      for (let i = 0; i < arguments.length; i++) {
+        const s = String(arguments[i] || "").trim();
+        if (s) return s;
+      }
+      return "";
+    }
+
     function buildSearchName(product) {
-      const name = (product.product_name || product.product_name_en || "").trim();
-      const generic = (product.generic_name || "").trim();
+      const name = firstNonEmpty(
+        product.product_name_en,
+        product.generic_name_en,
+        product.product_name,
+        product.generic_name,
+        product.product_name_fr,
+        product.generic_name_fr
+      );
       const brand = (product.brands || "").split(",")[0].trim();
       if (name && brand && !name.toLowerCase().includes(brand.toLowerCase())) {
         return brand + " " + name;
       }
-      return name || generic || brand || "";
+      return name || brand || "";
     }
 
     async function fetchJsonWithTimeout(url, timeoutMs) {
