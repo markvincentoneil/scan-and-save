@@ -335,6 +335,42 @@
       font-weight: 600;
       cursor: pointer;
     }
+
+    .source-order-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .source-order-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+
+    .source-order-list li span.label {
+      flex: 1;
+    }
+
+    .source-order-list button {
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .settings-hint {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin: 0;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -411,7 +447,20 @@
       <label class="row"><input type="checkbox" id="setAutoScan" checked /> Auto-scan when barcode is in focus</label>
       <label class="row"><input type="checkbox" id="setSourceOpenFacts" checked /> Lookup: Open Facts (all types)</label>
       <label class="row"><input type="checkbox" id="setSourceOpenProducts" checked /> Lookup: Open Products Facts</label>
+      <label class="row"><input type="checkbox" id="setGoUpc" /> Lookup: Go-UPC (needs API key)</label>
+      <label for="setGoUpcApiKey">Go-UPC API key</label>
+      <input type="password" id="setGoUpcApiKey" autocomplete="off" placeholder="Paste key from go-upc.com" />
+      <p class="settings-hint">
+        Free tier: 5,000 lookups/month.
+        <a href="https://go-upc.com/docs" target="_blank" rel="noopener">Get a key</a>
+        · example:
+        <a href="https://go-upc.com/search?q=060410017227" target="_blank" rel="noopener">Ruffles test UPC</a>
+      </p>
       <label class="row"><input type="checkbox" id="setSourceUpcDev" /> Lookup: upc.dev (often slow)</label>
+      <label class="row"><input type="checkbox" id="setParallelLookup" /> Try all sources at once (parallel)</label>
+      <label>UPC lookup order (first tried → last)</label>
+      <ul id="sourceOrderList" class="source-order-list"></ul>
+      <p class="settings-hint">Turn off parallel to test order one at a time. Put Go-UPC first for English names when you have a key.</p>
       <label for="setPreferredFlyer">Primary flyer button</label>
       <select id="setPreferredFlyer">
         <option value="reebee">Copy &amp; open Reebee</option>
@@ -425,7 +474,8 @@
     <span id="appVersion">v2.0.0</span> · Product names from
     <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>,
     <a href="https://world.openproductsfacts.org" target="_blank" rel="noopener">Open Products Facts</a>, and
-    <a href="https://upc.dev" target="_blank" rel="noopener">upc.dev</a>
+    <a href="https://upc.dev" target="_blank" rel="noopener">upc.dev</a>, and
+    <a href="https://go-upc.com" target="_blank" rel="noopener">Go-UPC</a>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -533,7 +583,11 @@
     const setAutoScan = document.getElementById("setAutoScan");
     const setSourceOpenFacts = document.getElementById("setSourceOpenFacts");
     const setSourceOpenProducts = document.getElementById("setSourceOpenProducts");
+    const setGoUpc = document.getElementById("setGoUpc");
+    const setGoUpcApiKey = document.getElementById("setGoUpcApiKey");
     const setSourceUpcDev = document.getElementById("setSourceUpcDev");
+    const setParallelLookup = document.getElementById("setParallelLookup");
+    const sourceOrderList = document.getElementById("sourceOrderList");
     const setPreferredFlyer = document.getElementById("setPreferredFlyer");
     const productImage = document.getElementById("productImage");
     const btnReadLabel = document.getElementById("btnReadLabel");
@@ -601,6 +655,22 @@
         parse: parseOpenFactsResponse,
       },
       {
+        id: "goupc",
+        label: "Go-UPC",
+        settingKey: "goUpc",
+        buildUrl(code) {
+          const key = encodeURIComponent((appSettings.goUpcApiKey || "").trim());
+          if (!key) return "";
+          return (
+            "https://go-upc.com/api/v1/code/" +
+            encodeURIComponent(code) +
+            "?key=" +
+            key
+          );
+        },
+        parse: parseGoUpcResponse,
+      },
+      {
         id: "upcdev",
         label: "upc.dev",
         settingKey: "upcDev",
@@ -612,15 +682,98 @@
       },
     ];
 
+    const DEFAULT_SOURCE_ORDER = ["goupc", "openfacts-all", "openproducts", "upcdev"];
+
     function defaultSettings() {
       return {
         autoStartCamera: true,
         autoScan: true,
         openFacts: true,
         openProducts: true,
+        goUpc: false,
+        goUpcApiKey: "",
         upcDev: false,
+        parallelLookup: false,
+        sourceOrder: DEFAULT_SOURCE_ORDER.slice(),
         preferredFlyer: "flipp",
       };
+    }
+
+    function normalizeSourceOrder(order) {
+      const ids = LOOKUP_SOURCE_DEFS.map(function (d) {
+        return d.id;
+      });
+      const out = [];
+      (order || []).forEach(function (id) {
+        if (ids.indexOf(id) >= 0 && out.indexOf(id) < 0) out.push(id);
+      });
+      ids.forEach(function (id) {
+        if (out.indexOf(id) < 0) out.push(id);
+      });
+      return out;
+    }
+
+    function isSourceEnabled(def) {
+      if (def.id === "goupc") {
+        return (
+          appSettings.goUpc !== false &&
+          String(appSettings.goUpcApiKey || "").trim().length > 0
+        );
+      }
+      return appSettings[def.settingKey] !== false;
+    }
+
+    function getLookupDefById(id) {
+      for (let i = 0; i < LOOKUP_SOURCE_DEFS.length; i++) {
+        if (LOOKUP_SOURCE_DEFS[i].id === id) return LOOKUP_SOURCE_DEFS[i];
+      }
+      return null;
+    }
+
+    function moveSourceInOrder(id, direction) {
+      const order = normalizeSourceOrder(appSettings.sourceOrder);
+      const index = order.indexOf(id);
+      if (index < 0) return;
+      const swap = index + direction;
+      if (swap < 0 || swap >= order.length) return;
+      const tmp = order[index];
+      order[index] = order[swap];
+      order[swap] = tmp;
+      appSettings.sourceOrder = order;
+      saveSettings();
+      renderSourceOrderList();
+    }
+
+    function renderSourceOrderList() {
+      if (!sourceOrderList) return;
+      const order = normalizeSourceOrder(appSettings.sourceOrder);
+      sourceOrderList.innerHTML = order
+        .map(function (id, index) {
+          const def = getLookupDefById(id);
+          if (!def) return "";
+          const enabled = isSourceEnabled(def);
+          const note = enabled ? "" : " (off)";
+          return (
+            '<li data-id="' +
+            id +
+            '"><span class="label">' +
+            (index + 1) +
+            ". " +
+            def.label +
+            note +
+            '</span><button type="button" data-move="up" aria-label="Move up">↑</button><button type="button" data-move="down" aria-label="Move down">↓</button></li>'
+          );
+        })
+        .join("");
+
+      sourceOrderList.querySelectorAll("button[data-move]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          const li = btn.closest("li");
+          const id = li && li.getAttribute("data-id");
+          if (!id) return;
+          moveSourceInOrder(id, btn.getAttribute("data-move") === "up" ? -1 : 1);
+        });
+      });
     }
 
     function loadSettings() {
@@ -681,13 +834,18 @@
     }
 
     function applySettingsToUI() {
+      appSettings.sourceOrder = normalizeSourceOrder(appSettings.sourceOrder);
       setAutoStartCamera.checked = appSettings.autoStartCamera !== false;
       setAutoScan.checked = appSettings.autoScan;
-      setSourceOpenFacts.checked = appSettings.openFacts;
-      setSourceOpenProducts.checked = appSettings.openProducts;
+      setSourceOpenFacts.checked = appSettings.openFacts !== false;
+      setSourceOpenProducts.checked = appSettings.openProducts !== false;
+      setGoUpc.checked = appSettings.goUpc !== false;
+      setGoUpcApiKey.value = appSettings.goUpcApiKey || "";
       setSourceUpcDev.checked = appSettings.upcDev;
+      setParallelLookup.checked = appSettings.parallelLookup === true;
       setPreferredFlyer.value = appSettings.preferredFlyer || "flipp";
       applyPrimaryFlyerButton();
+      renderSourceOrderList();
     }
 
     function readSettingsFromUI() {
@@ -695,10 +853,14 @@
       appSettings.autoScan = setAutoScan.checked;
       appSettings.openFacts = setSourceOpenFacts.checked;
       appSettings.openProducts = setSourceOpenProducts.checked;
+      appSettings.goUpc = setGoUpc.checked;
+      appSettings.goUpcApiKey = setGoUpcApiKey.value.trim();
       appSettings.upcDev = setSourceUpcDev.checked;
+      appSettings.parallelLookup = setParallelLookup.checked;
       appSettings.preferredFlyer = setPreferredFlyer.value;
       saveSettings();
       applyPrimaryFlyerButton();
+      renderSourceOrderList();
       if (isScanning) {
         if (appSettings.autoScan) {
           startAutoScan();
@@ -1301,19 +1463,71 @@
       };
     }
 
+    function parseGoUpcResponse(data, code, sourceLabel) {
+      if (!data || !data.product) return null;
+      const p = data.product;
+      const name = (p.name || "").trim();
+      const brand = (p.brand || "").trim();
+      let searchName = name;
+      if (name && brand && !name.toLowerCase().includes(brand.toLowerCase())) {
+        searchName = brand + " " + name;
+      }
+      if (!searchName) return null;
+      return {
+        found: true,
+        searchName,
+        display: searchName,
+        meta: "UPC " + code + " · " + sourceLabel,
+        source: sourceLabel,
+        imageUrl: (p.imageUrl || "").trim(),
+      };
+    }
+
     function getActiveLookupSources() {
-      return LOOKUP_SOURCE_DEFS.filter(function (def) {
-        return appSettings[def.settingKey] !== false;
-      });
+      const order = normalizeSourceOrder(appSettings.sourceOrder);
+      return order
+        .map(function (id) {
+          return getLookupDefById(id);
+        })
+        .filter(function (def) {
+          return def && isSourceEnabled(def);
+        });
     }
 
     async function lookupFromSource(source, code) {
-      const data = await fetchJsonWithTimeout(
-        source.buildUrl(code),
-        source.timeoutMs
-      );
+      const url = source.buildUrl(code);
+      if (!url) return null;
+      const data = await fetchJsonWithTimeout(url, source.timeoutMs);
       if (!data) return null;
       return source.parse(data, code, source.label);
+    }
+
+    async function lookupBarcodeInOrder(code, onProgress) {
+      const sources = getActiveLookupSources();
+      if (!sources.length) {
+        return {
+          found: false,
+          searchName: code,
+          display: "No lookup sources enabled in Settings.",
+          meta: "UPC " + code,
+        };
+      }
+
+      for (let i = 0; i < sources.length; i++) {
+        const source = sources[i];
+        if (onProgress) {
+          onProgress(source.label, i + 1, sources.length);
+        }
+        const result = await lookupFromSource(source, code);
+        if (result && result.found) return result;
+      }
+
+      return {
+        found: false,
+        searchName: code,
+        display: "Product not found in any database.",
+        meta: "UPC " + code,
+      };
     }
 
     async function lookupBarcodeParallel(code, onProgress) {
@@ -1382,7 +1596,11 @@
             variants.length
           );
         }
-        const result = await lookupBarcodeParallel(variant, onProgress);
+        const lookup =
+          appSettings.parallelLookup === true
+            ? lookupBarcodeParallel
+            : lookupBarcodeInOrder;
+        const result = await lookup(variant, onProgress);
         if (result && result.found) {
           saveProductCache(primaryCode, result);
           saveProductCache(variant, result);
@@ -1823,11 +2041,21 @@
       btnToggleSettings.textContent = collapsed ? "Settings ▾" : "Settings ▴";
     });
 
-    [setAutoStartCamera, setAutoScan, setSourceOpenFacts, setSourceOpenProducts, setSourceUpcDev, setPreferredFlyer].forEach(
-      function (el) {
-        el.addEventListener("change", readSettingsFromUI);
-      }
-    );
+    [
+      setAutoStartCamera,
+      setAutoScan,
+      setSourceOpenFacts,
+      setSourceOpenProducts,
+      setGoUpc,
+      setSourceUpcDev,
+      setParallelLookup,
+      setPreferredFlyer,
+    ].forEach(function (el) {
+      el.addEventListener("change", readSettingsFromUI);
+    });
+
+    setGoUpcApiKey.addEventListener("change", readSettingsFromUI);
+    setGoUpcApiKey.addEventListener("blur", readSettingsFromUI);
 
     btnReadLabel.addEventListener("click", readLabelFromCamera);
 
