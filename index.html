@@ -311,34 +311,6 @@
       font-size: 1.05rem;
     }
 
-    .history-list {
-      list-style: none;
-      margin: 10px 0 0;
-      padding: 0;
-    }
-
-    .history-list li {
-      border-top: 1px solid var(--border);
-      padding: 10px 0;
-    }
-
-    .history-list button {
-      background: none;
-      border: none;
-      color: var(--text);
-      text-align: left;
-      width: 100%;
-      padding: 0;
-      font-size: 0.92rem;
-      cursor: pointer;
-    }
-
-    .history-list .hist-meta {
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin-top: 4px;
-    }
-
     .update-banner {
       margin-top: 10px;
       padding: 10px 12px;
@@ -367,22 +339,6 @@
   <div id="updateBanner" class="update-banner hidden" role="status">
     A newer version of this app is ready.
     <button type="button" id="btnReloadApp">Refresh app</button>
-  </div>
-
-  <div class="card">
-    <button type="button" class="btn-collapse" id="btnToggleSettings" aria-expanded="false">Settings ▾</button>
-    <div id="settingsBody" class="settings-grid hidden">
-      <label class="row"><input type="checkbox" id="setAutoScan" checked /> Auto-scan when barcode is in focus</label>
-      <label class="row"><input type="checkbox" id="setSourceOpenFacts" checked /> Lookup: Open Facts (all types)</label>
-      <label class="row"><input type="checkbox" id="setSourceOpenProducts" checked /> Lookup: Open Products Facts</label>
-      <label class="row"><input type="checkbox" id="setSourceUpcDev" /> Lookup: upc.dev (often slow)</label>
-      <label for="setPreferredFlyer">Primary flyer button</label>
-      <select id="setPreferredFlyer">
-        <option value="flipp">Copy &amp; open Flipp</option>
-        <option value="reebee">Copy &amp; open Reebee</option>
-        <option value="google">Google (flyers)</option>
-      </select>
-    </div>
   </div>
 
   <div class="card">
@@ -424,7 +380,7 @@
 
   <div class="card hidden" id="resultCard">
     <img id="productImage" class="product-img hidden" alt="Product" />
-    <label for="searchText">Search text (edit if you like — saved on this device)</label>
+    <label for="searchText">Search text (edit if you like)</label>
     <textarea id="searchText" rows="2"></textarea>
     <p class="meta" id="productMeta"></p>
 
@@ -439,18 +395,28 @@
     <div id="actionStatus" class="status hidden"></div>
   </div>
 
-  <div class="card hidden" id="historyCard">
-    <strong style="font-size: 0.95rem;">Recent scans</strong>
-    <ul class="history-list" id="historyList"></ul>
-    <button type="button" class="btn btn-secondary" id="btnClearHistory" style="margin-top:8px;">Clear history</button>
-  </div>
-
   <div class="card">
     <strong style="font-size: 0.95rem;">Tips</strong>
     <ol class="steps">
       <li>Web and app searches <strong>copy</strong> the product name first — paste if the search box is empty (long-press → Paste).</li>
       <li>Accept the certificate warning the first time you open your computer’s HTTPS link.</li>
     </ol>
+  </div>
+
+  <div class="card">
+    <button type="button" class="btn-collapse" id="btnToggleSettings" aria-expanded="false">Settings ▾</button>
+    <div id="settingsBody" class="settings-grid hidden">
+      <label class="row"><input type="checkbox" id="setAutoScan" checked /> Auto-scan when barcode is in focus</label>
+      <label class="row"><input type="checkbox" id="setSourceOpenFacts" checked /> Lookup: Open Facts (all types)</label>
+      <label class="row"><input type="checkbox" id="setSourceOpenProducts" checked /> Lookup: Open Products Facts</label>
+      <label class="row"><input type="checkbox" id="setSourceUpcDev" /> Lookup: upc.dev (often slow)</label>
+      <label for="setPreferredFlyer">Primary flyer button</label>
+      <select id="setPreferredFlyer">
+        <option value="flipp">Copy &amp; open Flipp</option>
+        <option value="reebee">Copy &amp; open Reebee</option>
+        <option value="google">Google (flyers)</option>
+      </select>
+    </div>
   </div>
 
   <footer>
@@ -469,10 +435,7 @@
     const STORAGE_KEYS = {
       settings: "scan-and-save-v2-settings",
       cache: "scan-and-save-v2-cache",
-      fixes: "scan-and-save-v2-fixes",
-      history: "scan-and-save-v2-history",
     };
-    const HISTORY_MAX = 20;
     const REEBEE_APP_STORE_URL = "https://apps.apple.com/app/id558297215";
     const REEBEE_APP_SCHEME = "com.reebee.reebee://";
 
@@ -524,9 +487,6 @@
     const btnPrimaryFlyer = document.getElementById("btnPrimaryFlyer");
     const btnShorten = document.getElementById("btnShorten");
     const btnReadLabel = document.getElementById("btnReadLabel");
-    const historyCard = document.getElementById("historyCard");
-    const historyList = document.getElementById("historyList");
-    const btnClearHistory = document.getElementById("btnClearHistory");
     const updateBanner = document.getElementById("updateBanner");
     const btnReloadApp = document.getElementById("btnReloadApp");
     const appVersionEl = document.getElementById("appVersion");
@@ -643,19 +603,6 @@
       }
     }
 
-    function getUserFix(code) {
-      const fixes = loadJsonStorage(STORAGE_KEYS.fixes, {});
-      const entry = fixes[code];
-      return entry && entry.searchName ? String(entry.searchName).trim() : "";
-    }
-
-    function saveUserFix(code, searchName) {
-      if (!code || !searchName) return;
-      const fixes = loadJsonStorage(STORAGE_KEYS.fixes, {});
-      fixes[code] = { searchName: searchName.trim(), at: Date.now() };
-      saveJsonStorage(STORAGE_KEYS.fixes, fixes);
-    }
-
     function getCachedProduct(code) {
       const cache = loadJsonStorage(STORAGE_KEYS.cache, {});
       const entry = cache[code];
@@ -676,77 +623,6 @@
         at: Date.now(),
       };
       saveJsonStorage(STORAGE_KEYS.cache, cache);
-    }
-
-    function loadHistory() {
-      const list = loadJsonStorage(STORAGE_KEYS.history, []);
-      return Array.isArray(list) ? list : [];
-    }
-
-    function pushHistory(entry) {
-      let list = loadHistory().filter(function (h) {
-        return h.code !== entry.code;
-      });
-      list.unshift(entry);
-      if (list.length > HISTORY_MAX) list = list.slice(0, HISTORY_MAX);
-      saveJsonStorage(STORAGE_KEYS.history, list);
-      renderHistory();
-    }
-
-    function renderHistory() {
-      const list = loadHistory();
-      if (!list.length) {
-        historyCard.classList.add("hidden");
-        historyList.innerHTML = "";
-        return;
-      }
-      historyCard.classList.remove("hidden");
-      historyList.innerHTML = list
-        .map(function (h, idx) {
-          const when = new Date(h.at).toLocaleString(undefined, {
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          });
-          return (
-            '<li><button type="button" data-hist-idx="' +
-            idx +
-            '">' +
-            escapeHtml(h.name) +
-            '</button><div class="hist-meta">UPC ' +
-            escapeHtml(h.code) +
-            " · " +
-            escapeHtml(when) +
-            (h.source ? " · " + escapeHtml(h.source) : "") +
-            "</div></li>"
-          );
-        })
-        .join("");
-
-      historyList.querySelectorAll("button[data-hist-idx]").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          const idx = parseInt(btn.getAttribute("data-hist-idx"), 10);
-          const h = loadHistory()[idx];
-          if (!h) return;
-          lastBarcode = h.code;
-          manualBarcode.value = h.code;
-          searchText.value = h.name;
-          resultCard.classList.remove("hidden");
-          productMeta.textContent = "UPC " + h.code + " · from history";
-          const cached = getCachedProduct(h.code);
-          showProductImage(cached && cached.imageUrl ? cached.imageUrl : "");
-          btnPrimaryFlyer.classList.remove("hidden");
-          showStatus(actionStatus, "Loaded from history.", "ok");
-        });
-      });
-    }
-
-    function escapeHtml(s) {
-      return String(s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/"/g, "&quot;");
     }
 
     function applySettingsToUI() {
@@ -1411,19 +1287,6 @@
     }
 
     async function resolveProduct(primaryCode, onProgress) {
-      const fix = getUserFix(primaryCode);
-      if (fix) {
-        return {
-          found: true,
-          searchName: fix,
-          display: fix,
-          meta: "UPC " + primaryCode + " · Your saved name",
-          source: "Your edit",
-          imageUrl: "",
-          fromLocal: true,
-        };
-      }
-
       const cached = getCachedProduct(primaryCode);
       if (cached) {
         return {
@@ -1485,13 +1348,6 @@
         );
         btnPrimaryFlyer.classList.remove("hidden");
       }
-
-      pushHistory({
-        code: code,
-        name: searchText.value.trim() || code,
-        source: result.source || "",
-        at: Date.now(),
-      });
     }
 
     function normalizeBarcode(raw) {
@@ -1858,14 +1714,7 @@
         btnPrimaryFlyer.classList.remove("hidden");
 
         if (lastBarcode) {
-          saveUserFix(lastBarcode, best);
           productMeta.textContent = "UPC " + lastBarcode + " · from label (OCR)";
-          pushHistory({
-            code: lastBarcode,
-            name: best,
-            source: "OCR",
-            at: Date.now(),
-          });
         } else {
           productMeta.textContent = "From label (OCR) — scan barcode to link next time";
         }
@@ -1938,23 +1787,10 @@
       }
       searchText.value = shortenForFlyers(t);
       showStatus(actionStatus, "Shortened for flyer search.", "ok");
-      if (lastBarcode) saveUserFix(lastBarcode, searchText.value.trim());
     });
 
     btnPrimaryFlyer.addEventListener("click", handlePrimaryFlyer);
     btnReadLabel.addEventListener("click", readLabelFromCamera);
-
-    searchText.addEventListener("blur", function () {
-      if (!lastBarcode) return;
-      const t = searchText.value.trim();
-      if (t) saveUserFix(lastBarcode, t);
-    });
-
-    btnClearHistory.addEventListener("click", function () {
-      saveJsonStorage(STORAGE_KEYS.history, []);
-      renderHistory();
-      showStatus(actionStatus, "History cleared.", "ok");
-    });
 
     btnReloadApp.addEventListener("click", function () {
       window.location.reload();
@@ -2010,7 +1846,12 @@
 
     if (appVersionEl) appVersionEl.textContent = "v" + APP_VERSION;
     applySettingsToUI();
-    renderHistory();
+    try {
+      localStorage.removeItem("scan-and-save-v2-fixes");
+      localStorage.removeItem("scan-and-save-v2-history");
+    } catch (e) {
+      /* ignore */
+    }
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
