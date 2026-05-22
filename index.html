@@ -247,35 +247,6 @@
 
     .steps li { margin-bottom: 6px; }
 
-    .install-help {
-      margin-top: 12px;
-      padding: 12px;
-      background: #0f1419;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      font-size: 0.88rem;
-      color: var(--muted);
-    }
-
-    .install-help strong { color: var(--text); }
-
-    .install-help ol {
-      margin: 8px 0 0;
-      padding-left: 1.2rem;
-    }
-
-    .install-help li { margin-bottom: 6px; }
-
-    .install-badge {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      background: rgba(34, 197, 94, 0.15);
-      color: var(--ok);
-      font-size: 0.85rem;
-    }
-
     footer {
       margin-top: 20px;
       font-size: 0.78rem;
@@ -338,39 +309,6 @@
     <a class="btn btn-secondary" id="btnReebeeStore" href="https://apps.apple.com/app/id558297215" target="_blank" rel="noopener noreferrer" style="text-align: center; text-decoration: none; display: block;">Get Reebee on the App Store</a>
     <button type="button" class="btn btn-secondary" id="btnScanAgain">Scan another item</button>
     <div id="actionStatus" class="status hidden"></div>
-  </div>
-
-  <div class="card" id="installCard">
-    <strong style="font-size: 0.95rem;">Save on your iPhone</strong>
-    <p class="meta" style="margin: 8px 0 12px;">
-      The camera only works over <strong>HTTPS</strong>, not from a file saved in Files.
-      Add this page to your home screen from the <strong>current</strong> link you use (home computer or GitHub).
-    </p>
-    <p class="meta" style="margin: 0 0 12px; color: var(--warn);">
-      <strong>Old icon not working?</strong> Delete it (long-press → Remove App), open the app again in Safari
-      from a working address, then Add to Home Screen again. Renaming the app does not update an old icon’s link.
-    </p>
-    <div id="standaloneBadge" class="install-badge hidden">Opened from Home Screen</div>
-    <button type="button" class="btn btn-secondary" id="btnInstallHelp">Add to Home Screen — how to</button>
-    <button type="button" class="btn btn-secondary" id="btnDownloadHtml">Download HTML backup</button>
-    <div id="installHelp" class="install-help hidden">
-      <strong>iPhone (Safari)</strong>
-      <ol>
-        <li>Open this page using your computer’s <strong>HTTPS</strong> address (from <code>serve-https.py</code>).</li>
-        <li>Tap the <strong>Share</strong> button (square with arrow up).</li>
-        <li>Scroll and tap <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
-        <li>Launch <strong>Scan and Save</strong> from your home screen — no need to type the address again.</li>
-      </ol>
-      <p style="margin: 12px 0 0;">
-        If the icon was saved from your <strong>computer’s HTTPS address</strong>, that computer must be on and
-        running <code>serve-https.py</code> on the same Wi‑Fi — or use a <strong>GitHub Pages</strong> link instead
-        so the icon works without your PC.
-      </p>
-      <p style="margin: 8px 0 0; color: var(--warn);">
-        Safari does not allow websites to trigger “Add to Home Screen” automatically — you use Share manually.
-      </p>
-    </div>
-    <div id="downloadStatus" class="status hidden" style="margin-top: 10px;"></div>
   </div>
 
   <div class="card">
@@ -1304,69 +1242,6 @@
     document.addEventListener("visibilitychange", () => {
       if (document.hidden && isScanning) stopCamera();
     });
-
-    const btnInstallHelp = document.getElementById("btnInstallHelp");
-    const btnDownloadHtml = document.getElementById("btnDownloadHtml");
-    const installHelp = document.getElementById("installHelp");
-    const downloadStatus = document.getElementById("downloadStatus");
-    const standaloneBadge = document.getElementById("standaloneBadge");
-
-    function isStandaloneApp() {
-      return (
-        window.matchMedia("(display-mode: standalone)").matches ||
-        window.navigator.standalone === true
-      );
-    }
-
-    if (isStandaloneApp() && standaloneBadge) {
-      standaloneBadge.classList.remove("hidden");
-    }
-
-    btnInstallHelp.addEventListener("click", () => {
-      installHelp.classList.toggle("hidden");
-      btnInstallHelp.textContent = installHelp.classList.contains("hidden")
-        ? "Add to Home Screen — how to"
-        : "Hide instructions";
-    });
-
-    async function handleDownloadHtml() {
-      showStatus(
-        downloadStatus,
-        "Downloading… Open the file in Safari only for backup — camera will not work from Files.",
-        "info"
-      );
-      downloadStatus.classList.remove("hidden");
-
-      try {
-        const pageUrl = new URL("index.html", window.location.href).href;
-        const res = await fetch(pageUrl, { cache: "no-store" });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const html = await res.text();
-        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = "scan-and-save.html";
-        a.rel = "noopener";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(blobUrl);
-        showStatus(
-          downloadStatus,
-          "Saved. For daily use, prefer Add to Home Screen from HTTPS — the backup file cannot use the camera on iPhone.",
-          "ok"
-        );
-      } catch (e) {
-        showStatus(
-          downloadStatus,
-          "Could not download. Open index.html from your HTTPS server and try again.",
-          "warn"
-        );
-      }
-    }
-
-    btnDownloadHtml.addEventListener("click", handleDownloadHtml);
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
