@@ -178,11 +178,6 @@
       color: #fff;
     }
 
-    .btn-reebee {
-      background: linear-gradient(135deg, #059669, #10b981);
-      color: #fff;
-    }
-
     .btn-google {
       background: linear-gradient(135deg, #1a56db, #2563eb);
       color: #fff;
@@ -346,10 +341,6 @@
       Hold the phone <strong>10–14 inches (25–35 cm)</strong> from the barcode.
       <strong>Auto-scan</strong> captures when sharp, or tap <strong>Scan now</strong> anytime.
     </p>
-    <label class="scan-hint hidden" id="autoScanLabel" style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-      <input type="checkbox" id="autoScanEnabled" checked style="width: 1.1rem; height: 1.1rem;" />
-      Auto-scan when barcode is in focus
-    </label>
     <label for="liveProductName" class="hidden" id="liveProductLabel">Captured product</label>
     <input
       type="text"
@@ -387,7 +378,6 @@
     <button type="button" class="btn btn-primary-action hidden" id="btnPrimaryFlyer">Copy &amp; open Flipp</button>
     <button type="button" class="btn btn-secondary" id="btnShorten">Shorten for flyers</button>
     <button type="button" class="btn btn-secondary" id="btnCopy">Copy search text</button>
-    <button type="button" class="btn btn-reebee" id="btnReebee" data-flyer="reebee">Copy &amp; open Reebee app</button>
     <button type="button" class="btn btn-flipp" id="btnFlipp" data-flyer="flipp">Search on Flipp.com</button>
     <button type="button" class="btn btn-google" id="btnGoogleFlyer" data-flyer="google">Search on Google (flyers)</button>
     <a class="btn btn-secondary" id="btnReebeeStore" href="https://apps.apple.com/app/id558297215" target="_blank" rel="noopener noreferrer" style="text-align: center; text-decoration: none; display: block;">Get Reebee on the App Store</a>
@@ -413,7 +403,6 @@
       <label for="setPreferredFlyer">Primary flyer button</label>
       <select id="setPreferredFlyer">
         <option value="flipp">Copy &amp; open Flipp</option>
-        <option value="reebee">Copy &amp; open Reebee</option>
         <option value="google">Google (flyers)</option>
       </select>
     </div>
@@ -436,85 +425,13 @@
       settings: "scan-and-save-v2-settings",
       cache: "scan-and-save-v2-cache",
     };
-    const REEBEE_APP_STORE_URL = "https://apps.apple.com/app/id558297215";
-
     function googleFlyerSearchUrl(searchText) {
       const q = encodeURIComponent(searchText.trim());
       return "https://www.google.com/search?q=" + q + "+grocery+flyer+canada";
     }
 
-    const REEBEE_RETURN_URL_KEY = "scan-and-save-v2-return-url";
-    const REEBEE_LAUNCH_SCHEMES = ["com.reebee.reebee://", "reebee://"];
-
-    function isReebeeSchemePage() {
-      const href = window.location.href;
-      return href.indexOf("com.reebee") !== -1 || href.indexOf("reebee://") === 0;
-    }
-
-    function isOnScanAndSavePage() {
-      const href = window.location.href;
-      return href.indexOf("index.html") !== -1 || /\/v2\/?$/.test(href.split("?")[0]);
-    }
-
-    function restoreAppPageAfterReebee() {
-      try {
-        const returnUrl = sessionStorage.getItem(REEBEE_RETURN_URL_KEY);
-        if (!returnUrl) return;
-        if (isReebeeSchemePage()) {
-          sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
-          location.replace(returnUrl);
-          return;
-        }
-        if (isOnScanAndSavePage()) {
-          sessionStorage.removeItem(REEBEE_RETURN_URL_KEY);
-        }
-      } catch (e) {
-        console.debug("restoreAppPageAfterReebee", e);
-      }
-    }
-
-    function openReebeeApp() {
-      return new Promise(function (resolve) {
-        let settled = false;
-        let sawHidden = false;
-
-        function finish(appLikelyOpened) {
-          if (settled) return;
-          settled = true;
-          resolve(appLikelyOpened);
-        }
-
-        try {
-          sessionStorage.setItem(REEBEE_RETURN_URL_KEY, window.location.href);
-        } catch (e) {}
-
-        const onVisibility = function () {
-          if (document.hidden) {
-            sawHidden = true;
-          } else {
-            restoreAppPageAfterReebee();
-          }
-        };
-        document.addEventListener("visibilitychange", onVisibility);
-
-        window.location.href = REEBEE_LAUNCH_SCHEMES[0];
-
-        setTimeout(function () {
-          document.removeEventListener("visibilitychange", onVisibility);
-          finish(sawHidden);
-        }, 3500);
-      });
-    }
-
-    function reebeeWebSearchUrl(searchText) {
-      const q = encodeURIComponent(searchText.trim());
-      return q ? "https://www.reebee.com/search?q=" + q : "https://www.reebee.com";
-    }
-
     const scannerWrap = document.getElementById("scannerWrap");
     const scanHint = document.getElementById("scanHint");
-    const autoScanLabel = document.getElementById("autoScanLabel");
-    const autoScanEnabled = document.getElementById("autoScanEnabled");
     const btnScan = document.getElementById("btnScan");
     const btnStop = document.getElementById("btnStop");
     const btnCapture = document.getElementById("btnCapture");
@@ -528,7 +445,6 @@
     const btnCopy = document.getElementById("btnCopy");
     const btnFlipp = document.getElementById("btnFlipp");
     const btnGoogleFlyer = document.getElementById("btnGoogleFlyer");
-    const btnReebee = document.getElementById("btnReebee");
     const btnScanAgain = document.getElementById("btnScanAgain");
     const actionStatus = document.getElementById("actionStatus");
     const liveProductLabel = document.getElementById("liveProductLabel");
@@ -684,7 +600,10 @@
     }
 
     function applySettingsToUI() {
-      if (autoScanEnabled) autoScanEnabled.checked = appSettings.autoScan;
+      if (appSettings.preferredFlyer === "reebee") {
+        appSettings.preferredFlyer = "flipp";
+        saveSettings();
+      }
       setAutoScan.checked = appSettings.autoScan;
       setSourceOpenFacts.checked = appSettings.openFacts;
       setSourceOpenProducts.checked = appSettings.openProducts;
@@ -699,16 +618,23 @@
       appSettings.openProducts = setSourceOpenProducts.checked;
       appSettings.upcDev = setSourceUpcDev.checked;
       appSettings.preferredFlyer = setPreferredFlyer.value;
-      if (autoScanEnabled) autoScanEnabled.checked = appSettings.autoScan;
       saveSettings();
       applyPrimaryFlyerButton();
+      if (isScanning) {
+        if (appSettings.autoScan) {
+          startAutoScan();
+          showStatus(scanStatus, "Auto-scan enabled.", "info");
+        } else {
+          stopAutoScan();
+          showStatus(scanStatus, "Auto-scan off — use Scan now.", "info");
+        }
+      }
     }
 
     function applyPrimaryFlyerButton() {
       const pref = appSettings.preferredFlyer || "flipp";
       const labels = {
         flipp: "Copy & open Flipp",
-        reebee: "Copy & open Reebee",
         google: "Search on Google (flyers)",
       };
       btnPrimaryFlyer.textContent = labels[pref] || labels.flipp;
@@ -813,7 +739,7 @@
 
     function startAutoScan() {
       stopAutoScan();
-      if (!autoScanEnabled || !autoScanEnabled.checked) return;
+      if (!appSettings.autoScan) return;
 
       autoScanTimer = setInterval(function () {
         tryAutoScanTick();
@@ -864,7 +790,7 @@
         autoScanBusy ||
         lookupInFlight ||
         btnCapture.disabled ||
-        !autoScanEnabled.checked ||
+        !appSettings.autoScan ||
         !resultCard.classList.contains("hidden")
       ) {
         return;
@@ -1594,7 +1520,7 @@
 
         showStatus(
           scanStatus,
-          autoScanEnabled.checked
+          appSettings.autoScan
             ? "Auto-scan on — hold steady when sharp. Or tap Scan now."
             : "Camera on — tap Scan now when the barcode looks sharp.",
           "info"
@@ -1604,8 +1530,6 @@
 
         btnScan.classList.add("hidden");
         btnCapture.classList.remove("hidden");
-        autoScanLabel.classList.remove("hidden");
-        autoScanLabel.style.display = "flex";
         btnStop.classList.remove("hidden");
       } catch (err) {
         await stopCamera();
@@ -1641,7 +1565,6 @@
       clearReaderElement();
       scannerWrap.classList.add("hidden");
       scanHint.classList.add("hidden");
-      autoScanLabel.classList.add("hidden");
       hideLiveProductUI();
       btnCapture.classList.add("hidden");
       btnTorch.classList.add("hidden");
@@ -1785,40 +1708,8 @@
 
     async function handlePrimaryFlyer() {
       const pref = btnPrimaryFlyer.dataset.flyer || appSettings.preferredFlyer || "flipp";
-      if (pref === "reebee") await handleReebee();
-      else if (pref === "google") await handleGoogleFlyer();
+      if (pref === "google") await handleGoogleFlyer();
       else await handleFlipp();
-    }
-
-    async function handleReebee() {
-      const text = searchText.value.trim();
-      if (!text) {
-        showStatus(actionStatus, "Enter or scan something first.", "warn");
-        return;
-      }
-
-      try {
-        await copyText(text);
-      } catch (e) {
-        showStatus(actionStatus, "Could not copy — paste manually in Reebee.", "warn");
-      }
-
-      const opened = await openReebeeApp();
-      if (opened) {
-        showStatus(
-          actionStatus,
-          "Opened Reebee — long-press search and Paste (already copied).",
-          "ok"
-        );
-        return;
-      }
-
-      restoreAppPageAfterReebee();
-      showStatus(
-        actionStatus,
-        "Copied. Open Reebee from your home screen, then paste in search. (Safari may ask to open the app — tap Open.)",
-        "ok"
-      );
     }
 
     btnToggleSettings.addEventListener("click", function () {
@@ -1855,20 +1746,6 @@
     btnCapture.addEventListener("click", captureAndScan);
     btnTorch.addEventListener("click", toggleTorch);
     btnStop.addEventListener("click", stopCamera);
-    autoScanEnabled.addEventListener("change", function () {
-      appSettings.autoScan = autoScanEnabled.checked;
-      setAutoScan.checked = appSettings.autoScan;
-      saveSettings();
-      if (isScanning) {
-        if (autoScanEnabled.checked) {
-          startAutoScan();
-          showStatus(scanStatus, "Auto-scan enabled.", "info");
-        } else {
-          stopAutoScan();
-          showStatus(scanStatus, "Auto-scan off — use Scan now.", "info");
-        }
-      }
-    });
     btnManual.addEventListener("click", () => {
       const code = normalizeBarcode(manualBarcode.value);
       if (!code) {
@@ -1879,7 +1756,6 @@
       processBarcode(code);
     });
     btnCopy.addEventListener("click", handleCopy);
-    btnReebee.addEventListener("click", handleReebee);
     btnFlipp.addEventListener("click", handleFlipp);
     btnGoogleFlyer.addEventListener("click", handleGoogleFlyer);
     btnScanAgain.addEventListener("click", () => {
@@ -1896,15 +1772,8 @@
     });
 
     document.addEventListener("visibilitychange", function () {
-      if (!document.hidden) restoreAppPageAfterReebee();
       if (document.hidden && isScanning) stopCamera();
     });
-
-    window.addEventListener("pageshow", function () {
-      restoreAppPageAfterReebee();
-    });
-
-    restoreAppPageAfterReebee();
 
     if (appVersionEl) appVersionEl.textContent = "v" + APP_VERSION;
     applySettingsToUI();
